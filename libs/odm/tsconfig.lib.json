@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.json", // ◄── Hereda las reglas globales del monorepo
+  "compilerOptions": {
+    "outDir": "./dist",
+    "declaration": true,
+    "target": "ES2022",
+    "isolatedModules": true // ◄── Requerido por tsup para compilar rápido y limpio
+  },
+  "include": [
+    "src/**/*",
+    "tsup.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
