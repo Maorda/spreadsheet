@@ -1,7 +1,18 @@
 {
     "name": "@spreadsheet/odm",
     "version": "0.0.1",
-    "description": "ODM para Google Sheets con NestJS - Núcleo de persistencia y mapeo",
+    "description": "ODM para Google Sheets con NestJS - Núcleo de persistencia y mapeo relacional",
+    "license": "MIT",
+    "author": "Tu Nombre o Empresa <contacto@tudominio.com>",
+    "keywords": [
+        "nestjs",
+        "google-sheets",
+        "odm",
+        "orm",
+        "spreadsheet",
+        "typescript",
+        "database"
+    ],
     "main": "./dist/index.js",
     "module": "./dist/index.mjs",
     "types": "./dist/index.d.ts",
@@ -13,16 +24,17 @@
         }
     },
     "files": [
-        "dist"
+        "dist",
+        "README.md"
     ],
+    "publishConfig": {
+        "access": "public"
+    },
     "scripts": {
-        "build": "tsup"
+        "build": "tsup",
+        "prepublishOnly": "npm run build"
     },
     "dependencies": {
-        "@nestjs/axios": "^4.0.1",
-        "@nestjs/cache-manager": "^3.1.3",
-        "@nestjs/config": "^4.0.4",
-        "@nestjs/platform-express": "^11.1.26",
         "axios": "^1.17.0",
         "cache-manager": "^7.2.8",
         "dayjs": "^1.11.21",
@@ -34,8 +46,12 @@
         "uuid": "^14.0.0"
     },
     "peerDependencies": {
-        "@nestjs/common": "^11.1.26",
-        "@nestjs/core": "^11.1.26",
-        "rxjs": "^7.8.2"
+        "@nestjs/axios": "^3.0.0 || ^4.0.0",
+        "@nestjs/cache-manager": "^2.0.0 || ^3.0.0",
+        "@nestjs/common": "^10.0.0 || ^11.0.0",
+        "@nestjs/config": "^3.0.0 || ^4.0.0",
+        "@nestjs/core": "^10.0.0 || ^11.0.0",
+        "@nestjs/platform-express": "^10.0.0 || ^11.0.0",
+        "rxjs": "^7.8.0"
     }
 }

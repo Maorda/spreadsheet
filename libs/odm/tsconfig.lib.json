@@ -4,7 +4,8 @@
     "outDir": "./dist",
     "declaration": true,
     "target": "ES2022",
-    "isolatedModules": true // ◄── Requerido por tsup para compilar rápido y limpio
+    "isolatedModules": true, // ◄── Requerido por tsup para compilar rápido y limpio
+    "incremental": false
   },
   "include": [
     "src/**/*",

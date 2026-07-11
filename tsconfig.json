@@ -4,7 +4,7 @@
     "moduleResolution": "nodenext",
     "resolvePackageJsonExports": true,
     "esModuleInterop": true,
-    "isolatedModules": true,
+    "isolatedModules": true, // ◄── Mantenlo en true (Estándar moderno)
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,
@@ -22,17 +22,17 @@
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
     "paths": {
-      "@app/docs": [
+      "@spreadsheet/docs": [ // ◄── Corregido: Alineado con tu package.json
         "libs/docs/src"
       ],
-      "@app/docs/*": [
+      "@spreadsheet/docs/*": [ // ◄── Corregido
         "libs/docs/src/*"
       ],
-      "@app/odm": [
-        "libs/odm/src"
-      ],
-      "@app/odm/*": [
+      "@spreadsheet/odm/*": [ // ◄── Corregido
         "libs/odm/src/*"
+      ],
+      "@spreadsheet/odm": [ // ◄── Corregido
+        "libs/odm/src/index.ts"
       ]
     }
   }
