@@ -25,7 +25,7 @@ export class OutboxProcessor implements OnApplicationBootstrap, OnApplicationShu
     private readonly logger = new Logger(OutboxProcessor.name);
     private isRunning = false;
     private isShuttingDown = false;
-    private timeoutId?: NodeJS.Timeout;
+    private timeoutId?: ReturnType<typeof setTimeout>;
 
     constructor(
         private readonly moduleRef: ModuleRef,

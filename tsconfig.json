@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
+    "module": "node16",
+    "moduleResolution": "node16",
     "resolvePackageJsonExports": true,
     "esModuleInterop": true,
     "isolatedModules": true, // ◄── Mantenlo en true (Estándar moderno)
@@ -32,8 +32,17 @@
         "libs/odm/src/*"
       ],
       "@spreadsheet/odm": [ // ◄── Corregido
-        "libs/odm/src/index.ts"
+        "libs/odm/src"
       ]
     }
-  }
+  },
+  "include": [
+    "src/**/*",
+    "libs/**/*",
+    "apps/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

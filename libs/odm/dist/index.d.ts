@@ -543,6 +543,7 @@ interface FindOneAndUpdateOptions<T extends object, U = any> extends QueryOption
     new?: boolean;
     customConstructor?: ConstructorSignature<T, U>;
 }
+declare const InjectModel: (entity: Function) => PropertyDecorator & ParameterDecorator;
 interface PopulateOptions<T = any> {
     path: string;
     select?: string | string[] | Record<string, number | boolean>;
@@ -726,4 +727,14 @@ declare class RepositoryCoreFacade {
     constructor(metadata: MetadataRegistry, dataSource: DataSourceManager, uow: UnitOfWork, hydrator: SheetDocumentHydrator, queryEngine: QueryEngine, mutationEngine: MutationEngine, readGateway: GasQueryGateway, gateway: SheetDataGateway, transformer: SheetDataTransformer, populateEngine: PopulateEngine, aggregationBuilder: AggregationBuilder, aggregationFactory: AggregationFactory, joinSheetTabsService: JoinSheetTabsService, cacheManager: Cache);
 }
 
-export { CONNECTION_STABILITY, type ClassType, Column, type ColumnOptions, DataSourceManager, GoogleDriveConfig, HookType, IBaseProvider, IGoogleSheetProvider, INTERNAL_NEW, INTERNAL_REPO, IPostgresProvider, IProvider, MetadataRegistry, POSTGRES_TOKEN, PostgresConfig, PrimaryKey, ROW_INDEX_SYMBOL, type ReferenceOptions, RepositoryCoreFacade, SHEETS_ALL_RELATIONS, SHEETS_COLUMN_DETAILS, SHEETS_COLUMN_LIST, SHEETS_DELETE_CONTROL, SHEETS_DTO, SHEETS_HOOKS, SHEETS_PRIMARY_KEY, SHEETS_RELATIONS_LIST, SHEETS_REPOSITORY_MARKER, SHEETS_SPREADSHEET_ID, SHEETS_SUB_COLLECTIONS, SHEETS_TABLE_NAME, SHEETS_VERSION_FIELD, SHEETS_VIRTUALS, SHEETS_VIRTUAL_COLUMNS, SHEET_ODM_MODULE_OPTIONS, SHEET_ODM_OPTIONS, SheetOdmModule, type SheetOdmModuleAsyncOptions, SheetOdmModuleOptions, type SheetOdmModuleOptionsFactory, SheetsRepository, SubCollection, type SubCollectionOptions, TABLE_COLUMN_KEY, Table, type TableOptions, type VirtualOptions };
+interface OutboxAsyncOptions {
+    useFactory: (...args: any[]) => any;
+    inject?: any[];
+    imports?: any[];
+}
+declare class OutboxModule {
+    static register(options: SheetOdmModuleOptions): DynamicModule;
+    static registerAsync(options: OutboxAsyncOptions): DynamicModule;
+}
+
+export { CONNECTION_STABILITY, type ClassType, Column, type ColumnOptions, DataSourceManager, type FilterQuery, GoogleDriveConfig, HookType, IBaseProvider, IGoogleSheetProvider, INTERNAL_NEW, INTERNAL_REPO, IPostgresProvider, IProvider, InjectModel, MetadataRegistry, OutboxModule, POSTGRES_TOKEN, PostgresConfig, PrimaryKey, type QueryOptions, ROW_INDEX_SYMBOL, type ReferenceOptions, RepositoryCoreFacade, SHEETS_ALL_RELATIONS, SHEETS_COLUMN_DETAILS, SHEETS_COLUMN_LIST, SHEETS_DELETE_CONTROL, SHEETS_DTO, SHEETS_HOOKS, SHEETS_PRIMARY_KEY, SHEETS_RELATIONS_LIST, SHEETS_REPOSITORY_MARKER, SHEETS_SPREADSHEET_ID, SHEETS_SUB_COLLECTIONS, SHEETS_TABLE_NAME, SHEETS_VERSION_FIELD, SHEETS_VIRTUALS, SHEETS_VIRTUAL_COLUMNS, SHEET_ODM_MODULE_OPTIONS, SHEET_ODM_OPTIONS, SheetOdmModule, type SheetOdmModuleAsyncOptions, SheetOdmModuleOptions, type SheetOdmModuleOptionsFactory, SheetsRepository, SubCollection, type SubCollectionOptions, TABLE_COLUMN_KEY, Table, type TableOptions, type VirtualOptions };

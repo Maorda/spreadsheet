@@ -41,7 +41,9 @@ __export(index_exports, {
   INTERNAL_REPO: () => INTERNAL_REPO,
   IPostgresProvider: () => IPostgresProvider,
   IProvider: () => IProvider,
+  InjectModel: () => InjectModel,
   MetadataRegistry: () => MetadataRegistry,
+  OutboxModule: () => OutboxModule,
   POSTGRES_TOKEN: () => POSTGRES_TOKEN,
   PostgresConfig: () => PostgresConfig,
   PrimaryKey: () => PrimaryKey,
@@ -3470,6 +3472,7 @@ var CacheKeys = {
 
 // src/core/model/model.factory.ts
 var import_common21 = require("@nestjs/common");
+var InjectModel = /* @__PURE__ */ __name((entity) => (0, import_common21.Inject)(`${entity.name}Model`), "InjectModel");
 function createModel(entityClass, repo) {
   let DocumentModel = class DocumentModel2 {
     static {
@@ -5776,7 +5779,9 @@ __name(SubCollection, "SubCollection");
   INTERNAL_REPO,
   IPostgresProvider,
   IProvider,
+  InjectModel,
   MetadataRegistry,
+  OutboxModule,
   POSTGRES_TOKEN,
   PostgresConfig,
   PrimaryKey,

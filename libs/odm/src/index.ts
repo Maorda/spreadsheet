@@ -24,3 +24,12 @@ export * from './core/metadata/interfaces/index';
 export { MetadataRegistry } from './JoinSheetTabs/metadata.registry';
 export { RepositoryCoreFacade } from './core/repository/repository-core.facade';
 export { SheetsRepository } from './core/repository/sheets.repository';
+
+export { Table } from "./core/decorators/table.decorator";
+export { PrimaryKey } from "./core/decorators/primarykey.decorator";
+export { Column } from "./core/decorators/column.decorator";
+export { SubCollection } from "./core/decorators/subCollection.decorator";
+export { InjectModel } from "./core/model";
+
+export type { FilterQuery, QueryOptions } from "./core/model";
+export { OutboxModule } from "./core/outbox/outbox.module";

@@ -3398,6 +3398,7 @@ var CacheKeys = {
 
 // src/core/model/model.factory.ts
 import { Inject as Inject10, Logger as Logger16 } from "@nestjs/common";
+var InjectModel = /* @__PURE__ */ __name((entity) => Inject10(`${entity.name}Model`), "InjectModel");
 function createModel(entityClass, repo) {
   let DocumentModel = class DocumentModel2 {
     static {
@@ -5703,7 +5704,9 @@ export {
   INTERNAL_REPO,
   IPostgresProvider,
   IProvider,
+  InjectModel,
   MetadataRegistry,
+  OutboxModule,
   POSTGRES_TOKEN,
   PostgresConfig,
   PrimaryKey,
