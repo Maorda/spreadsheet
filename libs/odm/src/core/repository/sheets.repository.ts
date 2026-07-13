@@ -75,6 +75,26 @@ export class SheetsRepository<T extends object, U extends SheetDocument<T> = She
      * 🔍 BÚSQUEDA ÚNICA
      */
     async findOne(filter?: FilterQuery<T>, options?: QueryOptions<T>): Promise<U | null> {
+
+        const cachedItems = await this.cacheManager.get<any[]>(this.getCacheKey());
+        if (cachedItems && cachedItems.length > 0 && filter) {
+            const propertyName = Object.keys(filter)[0];
+            const searchValue = String(filter[propertyName as keyof FilterQuery<T>]);
+
+            // Búsqueda en memoria RAM (0.01 milisegundos vs 300ms de HTTP a GAS)
+            const schema = this.metadata.getSchema(this.entityClass);
+            const colConfig = schema.columns[propertyName];
+            const rawColName = colConfig?.name || propertyName;
+
+            const foundRaw = cachedItems.find(item => String(item[rawColName] ?? item[propertyName]) === searchValue);
+            if (foundRaw) {
+                this.logger.debug(`[Cache Hit] findOne resuelto desde RAM para [${this.sheetName}]`);
+                const instance = this.hydrateAndCacheRawResult<U>(foundRaw, options);
+                await this.applyRelations([instance], options);
+                return instance;
+            }
+        }
+
         // 1. Intentar lectura indexada (Camino rápido)
         if (this.canUseIndexedRead(filter, options)) {
             const propertyName = Object.keys(filter!)[0];
@@ -258,7 +278,7 @@ export class SheetsRepository<T extends object, U extends SheetDocument<T> = She
         const childMutations: { entityClass: ClassType<any>; payload: any; operation: TypeOp }[] = [];
         const relations = this.metadata.getCompiledRelations(this.entityClass);
 
-        // 🔀 DISEÑO TAB-TO-TAB: Procesamiento estricto de subcolecciones
+        // 🔀 DISEÑO TAB-TO-TAB: Procesamiento de subcolecciones
         for (const rel of relations) {
             if (rel.type === 'subcollection' && payload[rel.propertyName]) {
                 const childrenArray = payload[rel.propertyName];
@@ -291,12 +311,12 @@ export class SheetsRepository<T extends object, U extends SheetDocument<T> = She
             });
 
             for (const childMut of childMutations) {
-                const childSheetName = this.metadata.getSchema(childMut.entityClass).sheetName;
+                const childSchema = this.metadata.getSchema(childMut.entityClass);
                 const childPkField = this.metadata.getPrimaryKeyField(childMut.entityClass);
                 this.uow.queueOperation({
                     type: childMut.operation,
                     entityClass: childMut.entityClass,
-                    sheetName: childSheetName,
+                    sheetName: childSchema.sheetName,
                     doc: childMut.payload,
                     pk: childMut.payload[childPkField]
                 });
@@ -307,14 +327,20 @@ export class SheetsRepository<T extends object, U extends SheetDocument<T> = She
         }
 
         // ⚡ FLUJO B: DESPACHO DIRECTO AL DSM
+        // 1. Ejecutar mutación padre
         await this.dataSource.dispatchMutation(this.entityClass, operation, payload, payload);
 
+        // 2. Ejecutar mutaciones hijas
         for (const childMut of childMutations) {
             await this.dataSource.dispatchMutation(childMut.entityClass, childMut.operation, childMut.payload, childMut.payload);
         }
 
+        // 3. 🚀 SINCRONIZACIÓN EN CASCADA (Padre + Hijos)
+        // Esto actualiza la RAM inmediatamente después de los despachos exitosos
+        await this.syncOptimisticCache(doc, operation, childMutations);
+
         return doc;
-    }
+    };
 
     /**
      * 🗑️ ELIMINAR (Con soporte opcional para Cascading Deletes del nuevo módulo)
@@ -339,6 +365,7 @@ export class SheetsRepository<T extends object, U extends SheetDocument<T> = She
         }
 
         await this.dataSource.dispatchMutation(this.entityClass, TypeOp.DELETE, doc.toJSON(), doc.toJSON());
+        await this.syncOptimisticCache(doc, TypeOp.DELETE);
         return true;
     }
 
@@ -543,4 +570,63 @@ export class SheetsRepository<T extends object, U extends SheetDocument<T> = She
     createAggregation(): AggregationBuilder {
         return this.aggregationFactory.create();
     }
+    private async syncOptimisticCache(
+        doc: SheetDocument<T>,
+        op: TypeOp,
+        childMutations: { entityClass: ClassType<any>; payload: any; operation: TypeOp }[] = []
+    ): Promise<void> {
+        const pkField = this.getPrimaryKeyField();
+        const pkValue = doc.getPrimaryKeyValue(pkField as keyof T);
+
+        // Sincroniza Padre
+        await this.syncEntityCache(this.entityClass, doc.toJSON(), op, pkValue);
+
+        // Sincroniza Hijos en cascada
+        for (const child of childMutations) {
+            const childPkField = this.metadata.getPrimaryKeyField(child.entityClass);
+            const childPkValue = child.payload[childPkField];
+
+            await this.syncEntityCache(child.entityClass, child.payload, child.operation, childPkValue);
+        }
+    }
+
+    private async syncEntityCache(entityClass: ClassType<any>, payload: any, op: TypeOp, pkValue: any): Promise<void> {
+        const schema = this.metadata.getSchema(entityClass);
+        const cacheKey = CacheKeys.SHEET_DATA(schema.sheetName);
+        const cachedItems = await this.cacheManager.get<any[]>(cacheKey) || [];
+        const pkField = this.metadata.getPrimaryKeyField(entityClass);
+
+        if (op === TypeOp.INSERT) {
+            cachedItems.push(payload);
+        } else if (op === TypeOp.UPDATE) {
+            const index = cachedItems.findIndex(item => {
+                const itemPk = item[pkField] ?? item.id ?? item.ID;
+                return String(itemPk) === String(pkValue) || (payload._row && item._row === payload._row);
+            });
+
+            if (index !== -1) {
+                cachedItems[index] = { ...cachedItems[index], ...payload };
+            } else {
+                cachedItems.push(payload);
+            }
+        } else if (op === TypeOp.DELETE) {
+            const deleteControlProp = schema.deleteControl;
+            const index = cachedItems.findIndex(item => {
+                const itemPk = item[pkField] ?? item.id ?? item.ID;
+                return String(itemPk) === String(pkValue) || (payload._row && item._row === payload._row);
+            });
+
+            if (index !== -1) {
+                if (deleteControlProp) {
+                    cachedItems[index][deleteControlProp] = true;
+                } else {
+                    cachedItems.splice(index, 1);
+                }
+            }
+        }
+
+        await this.cacheManager.set(cacheKey, cachedItems);
+        this.logger.debug(`[Cache Sync] RAM actualizada para [${schema.sheetName}] (Op: ${op}) PK: ${pkValue}`);
+    }
+
 }
