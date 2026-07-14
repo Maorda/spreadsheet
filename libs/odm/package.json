@@ -1,6 +1,6 @@
 {
     "name": "@spreadsheet/odm",
-    "version": "0.0.1",
+    "version": "1.0.0",
     "description": "ODM para Google Sheets con NestJS - Núcleo de persistencia y mapeo relacional",
     "license": "MIT",
     "author": "Tu Nombre o Empresa <contacto@tudominio.com>",
@@ -16,17 +16,19 @@
     "main": "./dist/index.js",
     "module": "./dist/index.mjs",
     "types": "./dist/index.d.ts",
-    ".": {
-        "types": "./dist/index.d.ts",
-        "import": "./dist/index.mjs",
-        "require": "./dist/index.js"
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.mjs",
+            "require": "./dist/index.js"
+        },
+        "./index": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.mjs",
+            "require": "./dist/index.js"
+        },
+        "./package.json": "./package.json"
     },
-    "./index": {
-        "types": "./dist/index.d.ts",
-        "import": "./dist/index.mjs",
-        "require": "./dist/index.js"
-    },
-    "./package.json": "./package.json",
     "files": [
         "dist",
         "README.md"
@@ -47,13 +49,13 @@
         "nanoid": "^3.3.8",
         "pg": "^8.21.0",
         "reflect-metadata": "^0.2.2",
-        "uuid": "^9.0.1"
+        "uuid": "^9.0.1",
+        "@spreadsheet/auth": "^1.0.0"
     },
     "peerDependencies": {
         "@nestjs/axios": "^3.0.0 || ^4.0.0",
         "@nestjs/cache-manager": "^2.0.0 || ^3.0.0",
         "@nestjs/common": "^10.0.0 || ^11.0.0",
-        "@nestjs/config": "^3.0.0 || ^4.0.0",
         "@nestjs/core": "^10.0.0 || ^11.0.0",
         "@nestjs/platform-express": "^10.0.0 || ^11.0.0",
         "rxjs": "^7.8.0"

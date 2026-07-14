@@ -1,20 +1,18 @@
 import { ModuleMetadata, Type, OnApplicationBootstrap, DynamicModule, OnModuleInit, OnApplicationShutdown } from '@nestjs/common';
+import { AuthModuleOptions, GoogleClientProvider } from '@spreadsheet/auth';
 import { QueryResultRow, QueryResult, PoolClient } from 'pg';
 import { HttpService } from '@nestjs/axios';
 import { Cache } from 'cache-manager';
 
-declare class GoogleDriveConfig {
-    type: string;
-    project_id?: string;
-    private_key_id?: string;
-    private_key?: string;
-    client_email?: string;
-    client_id?: string;
-    auth_uri?: string;
-    token_uri?: string;
-    auth_provider_x509_cert_url?: string;
-    client_x509_cert_url?: string;
-    universe_domain?: string;
+interface SheetOdmRootOptions {
+    auth: AuthModuleOptions;
+    odm: SheetOdmModuleOptions;
+}
+interface SheetOdmRootAsyncOptions extends Pick<ModuleMetadata, 'imports'> {
+    useFactory?: (...args: any[]) => Promise<SheetOdmRootOptions> | SheetOdmRootOptions;
+    inject?: any[];
+    useClass?: Type<any>;
+    useExisting?: Type<any>;
 }
 declare const CONNECTION_STABILITY: {
     STABLE: number;
@@ -31,7 +29,6 @@ declare class PostgresConfig {
 }
 declare abstract class SheetOdmModuleOptions {
     outboxRetentionInterval?: string;
-    googleDriveConfig: GoogleDriveConfig;
     googleDriveBaseFolderId: string;
     spreadsheetId?: string;
     checkConnectionOnBoot?: boolean;
@@ -51,18 +48,6 @@ interface SheetOdmModuleAsyncOptions extends Pick<ModuleMetadata, 'imports'> {
 }
 interface SheetOdmModuleOptionsFactory {
     createSheetOdmOptions(): Promise<SheetOdmModuleOptions> | SheetOdmModuleOptions;
-}
-
-declare class GoogleSheetProvider {
-    private config;
-    private _sheets;
-    private _drive;
-    private _script;
-    constructor(config: SheetOdmModuleOptions);
-    get script(): any;
-    get sheets(): any;
-    get drive(): any;
-    private initialize;
 }
 
 interface ColumnOptions {
@@ -196,7 +181,7 @@ declare class SheetDataGateway implements ISheetWriteDriver {
     private readonly metadataRegistry;
     private readonly logger;
     private readonly spreadsheetId;
-    constructor(auth: GoogleSheetProvider, options: SheetOdmModuleOptions, metadataRegistry: MetadataRegistry);
+    constructor(auth: GoogleClientProvider, options: SheetOdmModuleOptions, metadataRegistry: MetadataRegistry);
     createSheet(title: string): Promise<any>;
     writeHeaders(sheetName: string, headers: string[]): Promise<void>;
     appendRow(sheetName: string, row: any[]): Promise<number>;
@@ -237,8 +222,8 @@ declare class SheetOdmModule implements OnApplicationBootstrap {
     private static hasBootstrapped;
     constructor(provisioner: InfrastructureProvisioner);
     onApplicationBootstrap(): Promise<void>;
-    static forRootAsync(options: SheetOdmModuleAsyncOptions): DynamicModule;
-    static forRoot(options: SheetOdmModuleOptions): DynamicModule;
+    static forRootAsync(options: SheetOdmRootAsyncOptions): DynamicModule;
+    static forRoot(options: SheetOdmRootOptions): DynamicModule;
     static forFeature(entities: Function[]): DynamicModule;
 }
 
@@ -270,7 +255,7 @@ declare class GoogleHealthService implements OnModuleInit {
     private readonly googleSheets;
     protected readonly optionsDatabase: SheetOdmModuleOptions;
     private readonly logger;
-    constructor(googleSheets: GoogleSheetProvider, optionsDatabase: SheetOdmModuleOptions);
+    constructor(googleSheets: GoogleClientProvider, optionsDatabase: SheetOdmModuleOptions);
     onModuleInit(): Promise<void>;
     checkConnection(retries?: number): Promise<{
         status: 'up' | 'down';
@@ -381,7 +366,6 @@ declare function Column(options?: ColumnOptions): PropertyDecorator;
 
 declare function SubCollection(arg: (() => ClassType<any>) | ClassType<any>, options: SubCollectionOptions): PropertyDecorator;
 
-declare const SHEET_ODM_OPTIONS = "SHEET_ODM_OPTIONS";
 declare const POSTGRES_TOKEN = "POSTGRES_PROVIDER";
 declare const SHEETS_TABLE_NAME: unique symbol;
 declare const SHEETS_COLUMN_LIST: unique symbol;
@@ -630,6 +614,8 @@ declare class SheetsRepository<T extends object, U extends SheetDocument<T> = Sh
     private processUpdates;
     private processDeletes;
     createAggregation(): AggregationBuilder;
+    private syncOptimisticCache;
+    private syncEntityCache;
 }
 
 declare class SheetDataTransformer {
@@ -737,4 +723,4 @@ declare class OutboxModule {
     static registerAsync(options: OutboxAsyncOptions): DynamicModule;
 }
 
-export { CONNECTION_STABILITY, type ClassType, Column, type ColumnOptions, DataSourceManager, type FilterQuery, GoogleDriveConfig, HookType, IBaseProvider, IGoogleSheetProvider, INTERNAL_NEW, INTERNAL_REPO, IPostgresProvider, IProvider, InjectModel, MetadataRegistry, OutboxModule, POSTGRES_TOKEN, PostgresConfig, PrimaryKey, type QueryOptions, ROW_INDEX_SYMBOL, type ReferenceOptions, RepositoryCoreFacade, SHEETS_ALL_RELATIONS, SHEETS_COLUMN_DETAILS, SHEETS_COLUMN_LIST, SHEETS_DELETE_CONTROL, SHEETS_DTO, SHEETS_HOOKS, SHEETS_PRIMARY_KEY, SHEETS_RELATIONS_LIST, SHEETS_REPOSITORY_MARKER, SHEETS_SPREADSHEET_ID, SHEETS_SUB_COLLECTIONS, SHEETS_TABLE_NAME, SHEETS_VERSION_FIELD, SHEETS_VIRTUALS, SHEETS_VIRTUAL_COLUMNS, SHEET_ODM_MODULE_OPTIONS, SHEET_ODM_OPTIONS, SheetOdmModule, type SheetOdmModuleAsyncOptions, SheetOdmModuleOptions, type SheetOdmModuleOptionsFactory, SheetsRepository, SubCollection, type SubCollectionOptions, TABLE_COLUMN_KEY, Table, type TableOptions, type VirtualOptions };
+export { CONNECTION_STABILITY, type ClassType, Column, type ColumnOptions, DataSourceManager, type FilterQuery, HookType, IBaseProvider, IGoogleSheetProvider, INTERNAL_NEW, INTERNAL_REPO, IPostgresProvider, IProvider, InjectModel, MetadataRegistry, OutboxModule, POSTGRES_TOKEN, PostgresConfig, PrimaryKey, type QueryOptions, ROW_INDEX_SYMBOL, type ReferenceOptions, RepositoryCoreFacade, SHEETS_ALL_RELATIONS, SHEETS_COLUMN_DETAILS, SHEETS_COLUMN_LIST, SHEETS_DELETE_CONTROL, SHEETS_DTO, SHEETS_HOOKS, SHEETS_PRIMARY_KEY, SHEETS_RELATIONS_LIST, SHEETS_REPOSITORY_MARKER, SHEETS_SPREADSHEET_ID, SHEETS_SUB_COLLECTIONS, SHEETS_TABLE_NAME, SHEETS_VERSION_FIELD, SHEETS_VIRTUALS, SHEETS_VIRTUAL_COLUMNS, SHEET_ODM_MODULE_OPTIONS, SheetOdmModule, type SheetOdmModuleAsyncOptions, SheetOdmModuleOptions, type SheetOdmModuleOptionsFactory, type SheetOdmRootAsyncOptions, type SheetOdmRootOptions, SheetsRepository, SubCollection, type SubCollectionOptions, TABLE_COLUMN_KEY, Table, type TableOptions, type VirtualOptions };

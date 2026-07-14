@@ -6,11 +6,13 @@ import { IPostgresProvider } from '../../interfaces/provider.interface';
 import { MetadataRegistry } from '../../JoinSheetTabs/metadata.registry';
 import { SheetOdmModuleOptions } from '../../interfaces/sheet-odm-options.interface';
 import { getRepositoryToken } from '../../utils/getRepositoryToken';
-import { POSTGRES_TOKEN, SHEET_ODM_OPTIONS } from '../../shared/constants/constants';
+import { POSTGRES_TOKEN } from '../../shared/constants/constants';
 import type { Cache } from 'cache-manager';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { CacheKeys } from '../cache/cache.keys';
 import { createModel } from '../model/model.factory';
+import { SHEET_ODM_OPTIONS } from '@spreadsheet/auth';
+
 export interface RawOutboxEntry {
     id: string;
     entityName: string;

@@ -2,14 +2,13 @@
 import { Module } from '@nestjs/common';
 import { SheetDataGateway } from './sheet-api/sheet-data.gateway';
 import { GasQueryGateway } from './gas-web-app/gas-query.gateway';
-import { GoogleSheetProvider } from '../adapters/google-sheet.provider';
-// ... importaciones de servicios de auth y opciones ...
+import { GoogleClientProvider } from '@spreadsheet/auth';
 
 @Module({
     providers: [
         SheetDataGateway,
         GasQueryGateway,
-        GoogleSheetProvider,
+        GoogleClientProvider,
         // Configuración de Inyección de Dependencias por Interfaz
         {
             provide: 'ISheetWriteDriver',
@@ -25,7 +24,7 @@ import { GoogleSheetProvider } from '../adapters/google-sheet.provider';
         'ISheetReadDriver',
         SheetDataGateway,
         GasQueryGateway,
-        GoogleSheetProvider
+        GoogleClientProvider
     ]
 })
 export class InfrastructureModule { }

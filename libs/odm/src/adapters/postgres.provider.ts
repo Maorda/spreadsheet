@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/comm
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { IPostgresProvider } from '../interfaces/provider.interface';
 import { SheetOdmModuleOptions } from '../interfaces/sheet-odm-options.interface';
-import { SHEET_ODM_OPTIONS } from '../shared/constants/constants';
+import { SHEET_ODM_OPTIONS } from '@spreadsheet/auth';
 @Injectable()
 export class PostgresProvider implements IPostgresProvider, OnApplicationBootstrap {
     private readonly logger = new Logger(PostgresProvider.name);

@@ -1,0 +1,2 @@
+export const AUTH_OPTIONS = 'AUTH_OPTIONS';
+export const SHEET_ODM_OPTIONS = 'SHEET_ODM_OPTIONS';

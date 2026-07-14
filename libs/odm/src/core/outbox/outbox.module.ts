@@ -3,7 +3,7 @@ import { PostgresOutboxService } from './services/postgres-outbox.service';
 import { OutboxService } from './interfaces/outbox-entry.interface';
 import { OutboxProcessor } from './outbox.processor';
 import { SheetOdmModuleOptions } from '../../interfaces/sheet-odm-options.interface';
-import { SHEET_ODM_OPTIONS } from '../../shared/constants/constants';
+import { SHEET_ODM_OPTIONS } from '@spreadsheet/auth';
 
 // Definimos una interfaz para el async options
 export interface OutboxAsyncOptions {

@@ -1,10 +1,14 @@
-import { Module, DynamicModule, Global, Provider, OnApplicationBootstrap, Logger } from '@nestjs/common';
+import { Module, DynamicModule, Global, Provider, OnApplicationBootstrap, Logger, ModuleMetadata, Type } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { APP_INTERCEPTOR } from '@nestjs/core';
+import { GoogleClientProvider, SHEET_ODM_OPTIONS, AuthModuleOptions, SpreadsheetAuthModule } from '@spreadsheet/auth';
 
 // Interfaces, Constantes y Tokens
-import { SheetOdmModuleAsyncOptions, SheetOdmModuleOptions } from './interfaces/sheet-odm-options.interface';
-import { POSTGRES_TOKEN, SHEET_ODM_OPTIONS } from './shared/constants/constants';
+import {
+  SheetOdmModuleOptions, SheetOdmRootOptions,
+  SheetOdmRootAsyncOptions
+} from './interfaces/sheet-odm-options.interface';
+import { POSTGRES_TOKEN } from './shared/constants/constants';
 import { PIPELINE_STAGE, DATA_TRANSFORM_OPERATOR, FILTER_OPERATOR } from './stages/pipeline.constants';
 
 // Núcleo del Sistema (Core)
@@ -32,9 +36,7 @@ import { EqOperator, ExistsOperator, GteOperator, GtOperator, InOperator, LteOpe
 
 // Infraestructura y Repositorios
 import { PostgresProvider } from './adapters/postgres.provider';
-import { GoogleSheetProvider } from './adapters/google-sheet.provider';
 import { GoogleHealthService } from './adapters/health/google-sheet-health.service';
-
 import { SheetDataGateway } from './infrastructure/sheet-api/sheet-data.gateway';
 import { GasQueryGateway } from './infrastructure/gas-web-app/gas-query.gateway';
 import { InfrastructureProvisioner } from './infrastructure/InfrastructureProvisioner';
@@ -56,12 +58,13 @@ import { AggregationBuilder } from './stages/aggregation.builder';
 import { AggregationFactory } from './stages/interfaces/aggregation.factory';
 import { JoinSheetTabsModule } from './JoinSheetTabs/JoinSheetTabsModule';
 
+
 // ============================================================================
 // AGRUPACIONES DE PROVIDERS
 // ============================================================================
 
 const CORE_SHARED_SERVICES: Provider[] = [
-  RepositoryCoreFacade, // 👈 Al estar aquí, NestJS le inyectará automáticamente el JoinSheetTabsService porque el módulo está importado en la raíz
+  RepositoryCoreFacade,
   DataSourceManager,
   MetadataRegistry,
   OdmDiagnosticsService,
@@ -78,7 +81,7 @@ const CORE_SHARED_SERVICES: Provider[] = [
 ];
 
 const INTERNAL_SERVICES: Provider[] = [
-  GoogleSheetProvider,
+
   GasQueryGateway,
   GoogleHealthService,
   SheetDataTransformer,
@@ -122,10 +125,6 @@ const ALL_COMMON_PROVIDERS: Provider[] = [
   },
 ];
 
-// ============================================================================
-// DECLARACIÓN DEL MÓDULO (Limpio y puramente Dinámico)
-// ============================================================================
-
 @Global()
 @Module({
   imports: [HttpModule],
@@ -156,10 +155,14 @@ export class SheetOdmModule implements OnApplicationBootstrap {
   // CONFIGURACIÓN ASÍNCRONA (Root Async)
   // ========================================================================
 
-  static forRootAsync(options: SheetOdmModuleAsyncOptions): DynamicModule {
+  static forRootAsync(options: SheetOdmRootAsyncOptions): DynamicModule {
     if (!options.useFactory) {
       throw new Error('El método [useFactory] es requerido en forRootAsync para SheetOdmModule.');
     }
+
+    // 💡 SOLUCIÓN AL TS(2722): Extraemos la función a una constante local.
+    // Esto asegura a TypeScript que la función no cambiará a 'undefined' dentro de los closures de abajo.
+    const factory = options.useFactory;
 
     return {
       global: true,
@@ -167,26 +170,51 @@ export class SheetOdmModule implements OnApplicationBootstrap {
       imports: [
         SheetCacheModule,
         UowModule,
-        JoinSheetTabsModule, // 🚀 Cargamos el módulo para que exponga el Orquestador
+        JoinSheetTabsModule,
         ...(options.imports || []),
-        OutboxModule.registerAsync({
-          useFactory: options.useFactory,
-          inject: options.inject,
+
+        SpreadsheetAuthModule.registerAsync({
           imports: options.imports,
+          inject: options.inject,
+          useFactory: async (...args: any[]) => {
+            const config = await factory(...args);
+            return config.auth; // ✅ TypeScript ahora sabe perfectamente que config es SheetOdmRootOptions
+          },
+        }),
+
+        OutboxModule.registerAsync({
+          imports: options.imports,
+          inject: options.inject,
+          useFactory: async (...args: any[]) => {
+            const config = await factory(...args);
+            return config.odm;
+          },
         }),
       ],
       controllers: [OdmDiagnosticsController],
       providers: [
-        { provide: 'DATABASE_OPTIONS', useFactory: options.useFactory, inject: options.inject || [] },
-        { provide: SHEET_ODM_OPTIONS, useFactory: options.useFactory, inject: options.inject || [] },
-
+        {
+          provide: 'DATABASE_OPTIONS',
+          useFactory: async (...args: any[]) => {
+            const config = await factory(...args);
+            return config.odm;
+          },
+          inject: options.inject || []
+        },
+        {
+          provide: SHEET_ODM_OPTIONS,
+          useFactory: async (...args: any[]) => {
+            const config = await factory(...args);
+            return config.odm; // Se entrega solo la parte ODM que tus componentes Core esperan
+          },
+          inject: options.inject || []
+        },
         {
           provide: PostgresProvider,
           useFactory: (opts: SheetOdmModuleOptions) => new PostgresProvider(opts),
           inject: [SHEET_ODM_OPTIONS],
         },
         { provide: POSTGRES_TOKEN, useExisting: PostgresProvider },
-
         ...ALL_COMMON_PROVIDERS,
       ],
       exports: [
@@ -195,7 +223,7 @@ export class SheetOdmModule implements OnApplicationBootstrap {
         PostgresProvider,
         POSTGRES_TOKEN,
         SheetCacheModule,
-        JoinSheetTabsModule, // 🚀 Exportación Global
+        JoinSheetTabsModule,
         ...CORE_SHARED_SERVICES,
       ],
     };
@@ -205,35 +233,36 @@ export class SheetOdmModule implements OnApplicationBootstrap {
   // CONFIGURACIÓN SÍNCRONA (Root Sync)
   // ========================================================================
 
-  static forRoot(options: SheetOdmModuleOptions): DynamicModule {
+  static forRoot(options: SheetOdmRootOptions): DynamicModule {
     return {
       global: true,
       module: SheetOdmModule,
       imports: [
+        SpreadsheetAuthModule.register(options.auth),
+        OutboxModule.register(options.odm),
         SheetCacheModule,
         UowModule,
-        JoinSheetTabsModule, // 🚀 Cargamos el módulo de Joins
+        JoinSheetTabsModule,
       ],
       controllers: [OdmDiagnosticsController],
       providers: [
-        { provide: 'DATABASE_OPTIONS', useValue: options },
-        { provide: SHEET_ODM_OPTIONS, useValue: options },
-
+        { provide: 'DATABASE_OPTIONS', useValue: options.odm },
+        { provide: SHEET_ODM_OPTIONS, useValue: options.odm }, // Ajustado para inyectar solo la parte de ODM
         {
           provide: PostgresProvider,
           useFactory: (opts: SheetOdmModuleOptions) => new PostgresProvider(opts),
           inject: [SHEET_ODM_OPTIONS],
         },
         { provide: POSTGRES_TOKEN, useExisting: PostgresProvider },
-
         ...ALL_COMMON_PROVIDERS,
       ],
       exports: [
         UowModule,
+        OutboxModule,
         PostgresProvider,
         POSTGRES_TOKEN,
         SheetCacheModule,
-        JoinSheetTabsModule, // 🚀 Exportación Global
+        JoinSheetTabsModule,
         ...CORE_SHARED_SERVICES,
       ],
     };
@@ -249,7 +278,6 @@ export class SheetOdmModule implements OnApplicationBootstrap {
 
       const repositoryToken = `SheetsRepository_${entity.name}`;
 
-      // 🔄 RETORNO A LO LIMPIO: El repositorio vuelve a recibir únicamente su coreFacade tradicional
       const repositoryProvider: Provider = {
         provide: repositoryToken,
         useFactory: (coreFacade: RepositoryCoreFacade) =>

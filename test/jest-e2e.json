@@ -11,6 +11,7 @@
     "^.+\\.(t|j)s$": "ts-jest"
   },
   "moduleNameMapper": {
+    "^@app/auth(|/.*)$": "<rootDir>/../libs/auth/src/$1",
     "^@app/docs(|/.*)$": "<rootDir>/../libs/docs/src/$1",
     "^@app/odm(|/.*)$": "<rootDir>/../libs/odm/src/$1"
   }

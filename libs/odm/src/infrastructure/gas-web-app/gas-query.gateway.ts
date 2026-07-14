@@ -1,5 +1,6 @@
 import { Injectable, Logger, HttpException, HttpStatus, Inject } from '@nestjs/common';
-import { POSTGRES_TOKEN, SHEET_ODM_OPTIONS } from '../../shared/constants/constants';
+import { POSTGRES_TOKEN } from '../../shared/constants/constants';
+import { SHEET_ODM_OPTIONS } from '@spreadsheet/auth';
 import { IPostgresProvider } from '../../interfaces/provider.interface';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';

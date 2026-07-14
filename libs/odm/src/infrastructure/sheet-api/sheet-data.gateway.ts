@@ -1,10 +1,10 @@
 // sheet-data.gateway.ts
 import { Injectable, Logger, Inject } from '@nestjs/common';
-import { GoogleSheetProvider } from '../../adapters/google-sheet.provider';
 import { MetadataRegistry } from '../../JoinSheetTabs/metadata.registry';
 import { ClassType } from '../../core/types/common.types';
-import { SHEET_ODM_OPTIONS } from '../../shared/constants/constants';
+import { SHEET_ODM_OPTIONS } from '@spreadsheet/auth';
 import { SheetOdmModuleOptions } from '../../interfaces/sheet-odm-options.interface';
+import { GoogleClientProvider } from '@spreadsheet/auth';
 
 // 💡 Sugerencia: Define esta interfaz en tus tipos para segregar las escrituras
 export interface ISheetWriteDriver {
@@ -28,7 +28,7 @@ export class SheetDataGateway implements ISheetWriteDriver {
     private readonly spreadsheetId: string; // La definimos como propiedad de clase
 
     constructor(
-        private readonly auth: GoogleSheetProvider,
+        private readonly auth: GoogleClientProvider,
         @Inject(SHEET_ODM_OPTIONS) private readonly options: SheetOdmModuleOptions,
         private readonly metadataRegistry: MetadataRegistry,
     ) {

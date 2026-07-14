@@ -1,14 +1,13 @@
 import { Injectable, Logger, Inject, OnModuleInit } from '@nestjs/common';
-import { GoogleSheetProvider } from '../google-sheet.provider';
 import { SheetOdmModuleOptions } from '../../interfaces/sheet-odm-options.interface';
-import { SHEET_ODM_OPTIONS } from '../../shared/constants/constants';
+import { GoogleClientProvider, SHEET_ODM_OPTIONS } from '@spreadsheet/auth';
 
 @Injectable()
 export class GoogleHealthService implements OnModuleInit {
     private readonly logger = new Logger(GoogleHealthService.name);
 
     constructor(
-        private readonly googleSheets: GoogleSheetProvider,
+        private readonly googleSheets: GoogleClientProvider,
         @Inject(SHEET_ODM_OPTIONS) protected readonly optionsDatabase: SheetOdmModuleOptions,
     ) { }
 

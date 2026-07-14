@@ -33,7 +33,6 @@ __export(index_exports, {
   CONNECTION_STABILITY: () => CONNECTION_STABILITY,
   Column: () => Column,
   DataSourceManager: () => DataSourceManager,
-  GoogleDriveConfig: () => GoogleDriveConfig,
   HookType: () => HookType,
   IBaseProvider: () => IBaseProvider,
   IGoogleSheetProvider: () => IGoogleSheetProvider,
@@ -65,7 +64,6 @@ __export(index_exports, {
   SHEETS_VIRTUALS: () => SHEETS_VIRTUALS,
   SHEETS_VIRTUAL_COLUMNS: () => SHEETS_VIRTUAL_COLUMNS,
   SHEET_ODM_MODULE_OPTIONS: () => SHEET_ODM_MODULE_OPTIONS,
-  SHEET_ODM_OPTIONS: () => SHEET_ODM_OPTIONS,
   SheetOdmModule: () => SheetOdmModule,
   SheetOdmModuleOptions: () => SheetOdmModuleOptions,
   SheetsRepository: () => SheetsRepository,
@@ -76,12 +74,12 @@ __export(index_exports, {
 module.exports = __toCommonJS(index_exports);
 
 // src/sheetOdm.module.ts
-var import_common39 = require("@nestjs/common");
+var import_common38 = require("@nestjs/common");
 var import_axios2 = require("@nestjs/axios");
 var import_core3 = require("@nestjs/core");
+var import_auth8 = require("@spreadsheet/auth");
 
 // src/shared/constants/constants.ts
-var SHEET_ODM_OPTIONS = "SHEET_ODM_OPTIONS";
 var POSTGRES_TOKEN = "POSTGRES_PROVIDER";
 var SHEETS_TABLE_NAME = /* @__PURE__ */ Symbol("sheets:table_name");
 var SHEETS_COLUMN_LIST = /* @__PURE__ */ Symbol("sheets:column_list");
@@ -115,7 +113,7 @@ var DATA_TRANSFORM_OPERATOR = /* @__PURE__ */ Symbol("DATA_TRANSFORM_OPERATOR");
 var FILTER_OPERATOR = /* @__PURE__ */ Symbol("FILTER_OPERATOR");
 
 // src/core/data-source-manager.ts
-var import_common6 = require("@nestjs/common");
+var import_common5 = require("@nestjs/common");
 
 // src/interfaces/provider.interface.ts
 var IBaseProvider = class {
@@ -140,28 +138,9 @@ var IPostgresProvider = class extends IProvider {
 };
 
 // src/adapters/health/google-sheet-health.service.ts
-var import_common2 = require("@nestjs/common");
-
-// src/adapters/google-sheet.provider.ts
 var import_common = require("@nestjs/common");
 
 // src/interfaces/sheet-odm-options.interface.ts
-var GoogleDriveConfig = class {
-  static {
-    __name(this, "GoogleDriveConfig");
-  }
-  type;
-  project_id;
-  private_key_id;
-  private_key;
-  client_email;
-  client_id;
-  auth_uri;
-  token_uri;
-  auth_provider_x509_cert_url;
-  client_x509_cert_url;
-  universe_domain;
-};
 var CONNECTION_STABILITY = {
   STABLE: 1500,
   UNSTABLE: 3e3,
@@ -184,7 +163,6 @@ var SheetOdmModuleOptions = class {
     __name(this, "SheetOdmModuleOptions");
   }
   outboxRetentionInterval;
-  googleDriveConfig;
   googleDriveBaseFolderId;
   spreadsheetId;
   checkConnectionOnBoot;
@@ -197,8 +175,8 @@ var SheetOdmModuleOptions = class {
   postgres;
 };
 
-// src/adapters/google-sheet.provider.ts
-var import_googleapis = require("googleapis");
+// src/adapters/health/google-sheet-health.service.ts
+var import_auth = require("@spreadsheet/auth");
 function _ts_decorate(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
@@ -216,107 +194,13 @@ function _ts_param(paramIndex, decorator) {
   };
 }
 __name(_ts_param, "_ts_param");
-var GoogleSheetProvider = class {
-  static {
-    __name(this, "GoogleSheetProvider");
-  }
-  config;
-  _sheets;
-  _drive;
-  _script;
-  constructor(config) {
-    this.config = config;
-    if (!this.config) {
-      console.error("\u274C GoogleAuthProvider: 'CONFIG' es undefined en el constructor");
-    }
-  }
-  get script() {
-    if (!this._script) {
-      this.initialize();
-    }
-    return this._script;
-  }
-  // Usamos un Getter para inicialización bajo demanda (lazy-loading)
-  get sheets() {
-    if (!this._sheets) {
-      this.initialize();
-    }
-    return this._sheets;
-  }
-  get drive() {
-    if (!this._drive) {
-      this.initialize();
-    }
-    return this._drive;
-  }
-  initialize() {
-    const googleConfig = this.config.googleDriveConfig;
-    if (!googleConfig || !googleConfig.client_email) {
-      throw new Error("Configuraci\xF3n de Google no cargada en googleDriveConfig. Verifica tu .env o AppModule.");
-    }
-    const auth = new import_googleapis.google.auth.GoogleAuth({
-      credentials: {
-        client_email: googleConfig.client_email,
-        private_key: googleConfig.private_key
-      },
-      scopes: [
-        "https://www.googleapis.com/auth/drive",
-        "https://www.googleapis.com/auth/drive.file",
-        "https://www.googleapis.com/auth/drive.readonly",
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/spreadsheets.readonly",
-        "https://www.googleapis.com/auth/drive.metadata.readonly",
-        "https://www.googleapis.com/auth/script.external_request"
-      ]
-    });
-    this._drive = import_googleapis.google.drive({
-      version: "v3",
-      auth
-    });
-    this._sheets = import_googleapis.google.sheets({
-      version: "v4",
-      auth
-    });
-    this._script = import_googleapis.google.script({
-      version: "v1",
-      auth
-    });
-  }
-};
-GoogleSheetProvider = _ts_decorate([
-  (0, import_common.Injectable)(),
-  _ts_param(0, (0, import_common.Inject)(SHEET_ODM_OPTIONS)),
-  _ts_metadata("design:type", Function),
-  _ts_metadata("design:paramtypes", [
-    typeof SheetOdmModuleOptions === "undefined" ? Object : SheetOdmModuleOptions
-  ])
-], GoogleSheetProvider);
-
-// src/adapters/health/google-sheet-health.service.ts
-function _ts_decorate2(decorators, target, key, desc) {
-  var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-  if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-  else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-  return c > 3 && r && Object.defineProperty(target, key, r), r;
-}
-__name(_ts_decorate2, "_ts_decorate");
-function _ts_metadata2(k, v) {
-  if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-}
-__name(_ts_metadata2, "_ts_metadata");
-function _ts_param2(paramIndex, decorator) {
-  return function(target, key) {
-    decorator(target, key, paramIndex);
-  };
-}
-__name(_ts_param2, "_ts_param");
 var GoogleHealthService = class _GoogleHealthService {
   static {
     __name(this, "GoogleHealthService");
   }
   googleSheets;
   optionsDatabase;
-  logger = new import_common2.Logger(_GoogleHealthService.name);
+  logger = new import_common.Logger(_GoogleHealthService.name);
   constructor(googleSheets, optionsDatabase) {
     this.googleSheets = googleSheets;
     this.optionsDatabase = optionsDatabase;
@@ -372,37 +256,38 @@ var GoogleHealthService = class _GoogleHealthService {
     };
   }
 };
-GoogleHealthService = _ts_decorate2([
-  (0, import_common2.Injectable)(),
-  _ts_param2(1, (0, import_common2.Inject)(SHEET_ODM_OPTIONS)),
-  _ts_metadata2("design:type", Function),
-  _ts_metadata2("design:paramtypes", [
-    typeof GoogleSheetProvider === "undefined" ? Object : GoogleSheetProvider,
+GoogleHealthService = _ts_decorate([
+  (0, import_common.Injectable)(),
+  _ts_param(1, (0, import_common.Inject)(import_auth.SHEET_ODM_OPTIONS)),
+  _ts_metadata("design:type", Function),
+  _ts_metadata("design:paramtypes", [
+    typeof import_auth.GoogleClientProvider === "undefined" ? Object : import_auth.GoogleClientProvider,
     typeof SheetOdmModuleOptions === "undefined" ? Object : SheetOdmModuleOptions
   ])
 ], GoogleHealthService);
 
 // src/infrastructure/gas-web-app/gas-query.gateway.ts
-var import_common3 = require("@nestjs/common");
+var import_common2 = require("@nestjs/common");
+var import_auth2 = require("@spreadsheet/auth");
 var import_axios = require("@nestjs/axios");
 var import_rxjs = require("rxjs");
-function _ts_decorate3(decorators, target, key, desc) {
+function _ts_decorate2(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate3, "_ts_decorate");
-function _ts_metadata3(k, v) {
+__name(_ts_decorate2, "_ts_decorate");
+function _ts_metadata2(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata3, "_ts_metadata");
-function _ts_param3(paramIndex, decorator) {
+__name(_ts_metadata2, "_ts_metadata");
+function _ts_param2(paramIndex, decorator) {
   return function(target, key) {
     decorator(target, key, paramIndex);
   };
 }
-__name(_ts_param3, "_ts_param");
+__name(_ts_param2, "_ts_param");
 var GasQueryGateway = class _GasQueryGateway {
   static {
     __name(this, "GasQueryGateway");
@@ -410,7 +295,7 @@ var GasQueryGateway = class _GasQueryGateway {
   httpService;
   pg;
   options;
-  logger = new import_common3.Logger(_GasQueryGateway.name);
+  logger = new import_common2.Logger(_GasQueryGateway.name);
   apiKey;
   apiUrl;
   spreadsheetId;
@@ -462,7 +347,7 @@ var GasQueryGateway = class _GasQueryGateway {
       }
       success = false;
       errorMessage = errorMessage || error.message || "Error de conexi\xF3n";
-      throw new import_common3.HttpException(`Carril GAS Interrumpido (${action}): ${errorMessage}`, import_common3.HttpStatus.BAD_GATEWAY);
+      throw new import_common2.HttpException(`Carril GAS Interrumpido (${action}): ${errorMessage}`, import_common2.HttpStatus.BAD_GATEWAY);
     } finally {
       const latency = Date.now() - startTime;
       try {
@@ -510,12 +395,12 @@ var GasQueryGateway = class _GasQueryGateway {
     return this.executeGasQuery(action, sheetName, data);
   }
 };
-GasQueryGateway = _ts_decorate3([
-  (0, import_common3.Injectable)(),
-  _ts_param3(1, (0, import_common3.Inject)(POSTGRES_TOKEN)),
-  _ts_param3(2, (0, import_common3.Inject)(SHEET_ODM_OPTIONS)),
-  _ts_metadata3("design:type", Function),
-  _ts_metadata3("design:paramtypes", [
+GasQueryGateway = _ts_decorate2([
+  (0, import_common2.Injectable)(),
+  _ts_param2(1, (0, import_common2.Inject)(POSTGRES_TOKEN)),
+  _ts_param2(2, (0, import_common2.Inject)(import_auth2.SHEET_ODM_OPTIONS)),
+  _ts_metadata2("design:type", Function),
+  _ts_metadata2("design:paramtypes", [
     typeof import_axios.HttpService === "undefined" ? Object : import_axios.HttpService,
     typeof IPostgresProvider === "undefined" ? Object : IPostgresProvider,
     typeof SheetOdmModuleOptions === "undefined" ? Object : SheetOdmModuleOptions
@@ -523,10 +408,10 @@ GasQueryGateway = _ts_decorate3([
 ], GasQueryGateway);
 
 // src/infrastructure/sheet-api/sheet-data.gateway.ts
-var import_common5 = require("@nestjs/common");
+var import_common4 = require("@nestjs/common");
 
 // src/JoinSheetTabs/metadata.registry.ts
-var import_common4 = require("@nestjs/common");
+var import_common3 = require("@nestjs/common");
 
 // src/core/store/entity-store.ts
 var globalEntityDataStore = /* @__PURE__ */ new WeakMap();
@@ -543,13 +428,13 @@ var EntityStore = {
 };
 
 // src/JoinSheetTabs/metadata.registry.ts
-function _ts_decorate4(decorators, target, key, desc) {
+function _ts_decorate3(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate4, "_ts_decorate");
+__name(_ts_decorate3, "_ts_decorate");
 var ODM_GLOBAL_REGISTRY_KEY = /* @__PURE__ */ Symbol.for("sheetOdm.global_metadata_store");
 if (!globalThis[ODM_GLOBAL_REGISTRY_KEY]) {
   globalThis[ODM_GLOBAL_REGISTRY_KEY] = /* @__PURE__ */ new Set();
@@ -560,7 +445,7 @@ var MetadataRegistry = class _MetadataRegistry {
   }
   static entities = /* @__PURE__ */ new Set();
   relations = /* @__PURE__ */ new Map();
-  logger = new import_common4.Logger(_MetadataRegistry.name);
+  logger = new import_common3.Logger(_MetadataRegistry.name);
   // Cachés a nivel de instancia
   schemaCache = /* @__PURE__ */ new Map();
   // 🔥 OPTIMIZACIÓN: Índices O(1) para búsquedas ultrarrápidas
@@ -787,28 +672,30 @@ var MetadataRegistry = class _MetadataRegistry {
     return colConfig.index ? `${baseName}*` : baseName;
   }
 };
-MetadataRegistry = _ts_decorate4([
-  (0, import_common4.Injectable)()
+MetadataRegistry = _ts_decorate3([
+  (0, import_common3.Injectable)()
 ], MetadataRegistry);
 
 // src/infrastructure/sheet-api/sheet-data.gateway.ts
-function _ts_decorate5(decorators, target, key, desc) {
+var import_auth3 = require("@spreadsheet/auth");
+var import_auth4 = require("@spreadsheet/auth");
+function _ts_decorate4(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate5, "_ts_decorate");
-function _ts_metadata4(k, v) {
+__name(_ts_decorate4, "_ts_decorate");
+function _ts_metadata3(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata4, "_ts_metadata");
-function _ts_param4(paramIndex, decorator) {
+__name(_ts_metadata3, "_ts_metadata");
+function _ts_param3(paramIndex, decorator) {
   return function(target, key) {
     decorator(target, key, paramIndex);
   };
 }
-__name(_ts_param4, "_ts_param");
+__name(_ts_param3, "_ts_param");
 var SheetDataGateway = class _SheetDataGateway {
   static {
     __name(this, "SheetDataGateway");
@@ -816,7 +703,7 @@ var SheetDataGateway = class _SheetDataGateway {
   auth;
   options;
   metadataRegistry;
-  logger = new import_common5.Logger(_SheetDataGateway.name);
+  logger = new import_common4.Logger(_SheetDataGateway.name);
   spreadsheetId;
   constructor(auth, options, metadataRegistry) {
     this.auth = auth;
@@ -1029,12 +916,12 @@ var SheetDataGateway = class _SheetDataGateway {
     }
   }
 };
-SheetDataGateway = _ts_decorate5([
-  (0, import_common5.Injectable)(),
-  _ts_param4(1, (0, import_common5.Inject)(SHEET_ODM_OPTIONS)),
-  _ts_metadata4("design:type", Function),
-  _ts_metadata4("design:paramtypes", [
-    typeof GoogleSheetProvider === "undefined" ? Object : GoogleSheetProvider,
+SheetDataGateway = _ts_decorate4([
+  (0, import_common4.Injectable)(),
+  _ts_param3(1, (0, import_common4.Inject)(import_auth3.SHEET_ODM_OPTIONS)),
+  _ts_metadata3("design:type", Function),
+  _ts_metadata3("design:paramtypes", [
+    typeof import_auth4.GoogleClientProvider === "undefined" ? Object : import_auth4.GoogleClientProvider,
     typeof SheetOdmModuleOptions === "undefined" ? Object : SheetOdmModuleOptions,
     typeof MetadataRegistry === "undefined" ? Object : MetadataRegistry
   ])
@@ -1084,23 +971,23 @@ var IdFactory = class {
 };
 
 // src/core/data-source-manager.ts
-function _ts_decorate6(decorators, target, key, desc) {
+function _ts_decorate5(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate6, "_ts_decorate");
-function _ts_metadata5(k, v) {
+__name(_ts_decorate5, "_ts_decorate");
+function _ts_metadata4(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata5, "_ts_metadata");
-function _ts_param5(paramIndex, decorator) {
+__name(_ts_metadata4, "_ts_metadata");
+function _ts_param4(paramIndex, decorator) {
   return function(target, key) {
     decorator(target, key, paramIndex);
   };
 }
-__name(_ts_param5, "_ts_param");
+__name(_ts_param4, "_ts_param");
 var DataSourceManager = class _DataSourceManager {
   static {
     __name(this, "DataSourceManager");
@@ -1111,7 +998,7 @@ var DataSourceManager = class _DataSourceManager {
   sheetDataGateway;
   outboxService;
   metadataRegistry;
-  logger = new import_common6.Logger(_DataSourceManager.name);
+  logger = new import_common5.Logger(_DataSourceManager.name);
   constructor(googleHealth, postgresProvider, gasQueryGateway, sheetDataGateway, outboxService, metadataRegistry) {
     this.googleHealth = googleHealth;
     this.postgresProvider = postgresProvider;
@@ -1134,21 +1021,21 @@ var DataSourceManager = class _DataSourceManager {
   }
   async checkAllHealth() {
     this.logger.debug("Ejecutando diagn\xF3stico integral de infraestructura...");
-    const [google2, postgres] = await Promise.all([
+    const [google, postgres] = await Promise.all([
       this.googleHealth.checkConnection(),
       this.postgresProvider.checkHealth()
     ]);
     let globalStatus = "healthy";
-    if (google2.status === "down" && postgres.status === "down") {
+    if (google.status === "down" && postgres.status === "down") {
       globalStatus = "down";
-    } else if (google2.status === "down" || postgres.status === "down") {
+    } else if (google.status === "down" || postgres.status === "down") {
       globalStatus = "degraded";
     }
     return {
       status: globalStatus,
       timestamp: (/* @__PURE__ */ new Date()).toISOString(),
       services: {
-        google: google2,
+        google,
         postgres
       }
     };
@@ -1234,11 +1121,11 @@ var DataSourceManager = class _DataSourceManager {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 };
-DataSourceManager = _ts_decorate6([
-  (0, import_common6.Injectable)(),
-  _ts_param5(1, (0, import_common6.Inject)(POSTGRES_TOKEN)),
-  _ts_metadata5("design:type", Function),
-  _ts_metadata5("design:paramtypes", [
+DataSourceManager = _ts_decorate5([
+  (0, import_common5.Injectable)(),
+  _ts_param4(1, (0, import_common5.Inject)(POSTGRES_TOKEN)),
+  _ts_metadata4("design:type", Function),
+  _ts_metadata4("design:paramtypes", [
     typeof GoogleHealthService === "undefined" ? Object : GoogleHealthService,
     typeof IPostgresProvider === "undefined" ? Object : IPostgresProvider,
     typeof GasQueryGateway === "undefined" ? Object : GasQueryGateway,
@@ -1249,20 +1136,20 @@ DataSourceManager = _ts_decorate6([
 ], DataSourceManager);
 
 // src/core/interceptors/gas-telemetry.interceptor.ts
-var import_common7 = require("@nestjs/common");
+var import_common6 = require("@nestjs/common");
 var import_operators = require("rxjs/operators");
-function _ts_decorate7(decorators, target, key, desc) {
+function _ts_decorate6(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate7, "_ts_decorate");
+__name(_ts_decorate6, "_ts_decorate");
 var GasTelemetryInterceptor = class {
   static {
     __name(this, "GasTelemetryInterceptor");
   }
-  logger = new import_common7.Logger("GAS_Telemetry");
+  logger = new import_common6.Logger("GAS_Telemetry");
   intercept(context, next) {
     const startTime = Date.now();
     const request = context.switchToHttp().getRequest();
@@ -1279,12 +1166,12 @@ var GasTelemetryInterceptor = class {
     }));
   }
 };
-GasTelemetryInterceptor = _ts_decorate7([
-  (0, import_common7.Injectable)()
+GasTelemetryInterceptor = _ts_decorate6([
+  (0, import_common6.Injectable)()
 ], GasTelemetryInterceptor);
 
 // src/core/base/sheet-document-hydrator.ts
-var import_common9 = require("@nestjs/common");
+var import_common8 = require("@nestjs/common");
 var import_crypto = require("crypto");
 
 // src/core/wrapper/sheet-document.ts
@@ -1342,16 +1229,16 @@ var SheetDocument = class {
 };
 
 // src/core/base/sheetDataTransformer.ts
-var import_common8 = require("@nestjs/common");
+var import_common7 = require("@nestjs/common");
 var import_dayjs = __toESM(require("dayjs"));
 var import_timezone = __toESM(require("dayjs/plugin/timezone"));
-function _ts_decorate8(decorators, target, key, desc) {
+function _ts_decorate7(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate8, "_ts_decorate");
+__name(_ts_decorate7, "_ts_decorate");
 import_dayjs.default.extend(import_timezone.default);
 var SheetDataTransformer = class {
   static {
@@ -1467,28 +1354,28 @@ var SheetDataTransformer = class {
     return value;
   }
 };
-SheetDataTransformer = _ts_decorate8([
-  (0, import_common8.Injectable)()
+SheetDataTransformer = _ts_decorate7([
+  (0, import_common7.Injectable)()
 ], SheetDataTransformer);
 
 // src/core/base/sheet-document-hydrator.ts
-function _ts_decorate9(decorators, target, key, desc) {
+function _ts_decorate8(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate9, "_ts_decorate");
-function _ts_metadata6(k, v) {
+__name(_ts_decorate8, "_ts_decorate");
+function _ts_metadata5(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata6, "_ts_metadata");
+__name(_ts_metadata5, "_ts_metadata");
 var SheetDocumentHydrator = class _SheetDocumentHydrator {
   static {
     __name(this, "SheetDocumentHydrator");
   }
   transformer;
-  logger = new import_common9.Logger(_SheetDocumentHydrator.name);
+  logger = new import_common8.Logger(_SheetDocumentHydrator.name);
   constructor(transformer) {
     this.transformer = transformer;
   }
@@ -1547,16 +1434,16 @@ var SheetDocumentHydrator = class _SheetDocumentHydrator {
     }
   }
 };
-SheetDocumentHydrator = _ts_decorate9([
-  (0, import_common9.Injectable)(),
-  _ts_metadata6("design:type", Function),
-  _ts_metadata6("design:paramtypes", [
+SheetDocumentHydrator = _ts_decorate8([
+  (0, import_common8.Injectable)(),
+  _ts_metadata5("design:type", Function),
+  _ts_metadata5("design:paramtypes", [
     typeof SheetDataTransformer === "undefined" ? Object : SheetDataTransformer
   ])
 ], SheetDocumentHydrator);
 
 // src/core/engine/populate.engine.ts
-var import_common10 = require("@nestjs/common");
+var import_common9 = require("@nestjs/common");
 
 // src/core/engine/populate.utils.ts
 function buildPopulateTree(paths) {
@@ -1593,23 +1480,23 @@ var ModelRegistry = class {
 };
 
 // src/core/engine/populate.engine.ts
-function _ts_decorate10(decorators, target, key, desc) {
+function _ts_decorate9(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate10, "_ts_decorate");
-function _ts_metadata7(k, v) {
+__name(_ts_decorate9, "_ts_decorate");
+function _ts_metadata6(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata7, "_ts_metadata");
+__name(_ts_metadata6, "_ts_metadata");
 var PopulateEngine = class _PopulateEngine {
   static {
     __name(this, "PopulateEngine");
   }
   metadataRegistry;
-  logger = new import_common10.Logger(_PopulateEngine.name);
+  logger = new import_common9.Logger(_PopulateEngine.name);
   constructor(metadataRegistry) {
     this.metadataRegistry = metadataRegistry;
   }
@@ -1714,28 +1601,28 @@ var PopulateEngine = class _PopulateEngine {
     }
   }
 };
-PopulateEngine = _ts_decorate10([
-  (0, import_common10.Injectable)(),
-  _ts_metadata7("design:type", Function),
-  _ts_metadata7("design:paramtypes", [
+PopulateEngine = _ts_decorate9([
+  (0, import_common9.Injectable)(),
+  _ts_metadata6("design:type", Function),
+  _ts_metadata6("design:paramtypes", [
     typeof MetadataRegistry === "undefined" ? Object : MetadataRegistry
   ])
 ], PopulateEngine);
 
 // src/core/query/query.engine.ts
-var import_common12 = require("@nestjs/common");
+var import_common11 = require("@nestjs/common");
 
 // src/stages/transform.operators.ts
-var import_common11 = require("@nestjs/common");
+var import_common10 = require("@nestjs/common");
 var import_dayjs2 = __toESM(require("dayjs"));
 var import_customParseFormat = __toESM(require("dayjs/plugin/customParseFormat"));
-function _ts_decorate11(decorators, target, key, desc) {
+function _ts_decorate10(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate11, "_ts_decorate");
+__name(_ts_decorate10, "_ts_decorate");
 import_dayjs2.default.extend(import_customParseFormat.default);
 var IfOperator = class {
   static {
@@ -1752,8 +1639,8 @@ var IfOperator = class {
     return condition ? engine.evaluate(args.then, record) : engine.evaluate(args.else, record);
   }
 };
-IfOperator = _ts_decorate11([
-  (0, import_common11.Injectable)()
+IfOperator = _ts_decorate10([
+  (0, import_common10.Injectable)()
 ], IfOperator);
 var MultiplyOperator = class {
   static {
@@ -1774,8 +1661,8 @@ var MultiplyOperator = class {
     }, 1);
   }
 };
-MultiplyOperator = _ts_decorate11([
-  (0, import_common11.Injectable)()
+MultiplyOperator = _ts_decorate10([
+  (0, import_common10.Injectable)()
 ], MultiplyOperator);
 var IncOperator = class {
   static {
@@ -1792,8 +1679,8 @@ var IncOperator = class {
     return (isNaN(current) ? 0 : current) + (isNaN(val) ? 0 : val);
   }
 };
-IncOperator = _ts_decorate11([
-  (0, import_common11.Injectable)()
+IncOperator = _ts_decorate10([
+  (0, import_common10.Injectable)()
 ], IncOperator);
 var MinMaxOperator = class {
   static {
@@ -1816,8 +1703,8 @@ var MinMaxOperator = class {
     return type === "min" ? Math.min(current, target) : Math.max(current, target);
   }
 };
-MinMaxOperator = _ts_decorate11([
-  (0, import_common11.Injectable)()
+MinMaxOperator = _ts_decorate10([
+  (0, import_common10.Injectable)()
 ], MinMaxOperator);
 var RoundOperator = class {
   static {
@@ -1837,8 +1724,8 @@ var RoundOperator = class {
     return Math.round(val * factor) / factor;
   }
 };
-RoundOperator = _ts_decorate11([
-  (0, import_common11.Injectable)()
+RoundOperator = _ts_decorate10([
+  (0, import_common10.Injectable)()
 ], RoundOperator);
 var MathOperator = class {
   static {
@@ -1864,8 +1751,8 @@ var MathOperator = class {
     }
   }
 };
-MathOperator = _ts_decorate11([
-  (0, import_common11.Injectable)()
+MathOperator = _ts_decorate10([
+  (0, import_common10.Injectable)()
 ], MathOperator);
 var UpperOperator = class {
   static {
@@ -1880,8 +1767,8 @@ var UpperOperator = class {
     return value !== null && value !== void 0 ? String(value).toUpperCase() : "";
   }
 };
-UpperOperator = _ts_decorate11([
-  (0, import_common11.Injectable)()
+UpperOperator = _ts_decorate10([
+  (0, import_common10.Injectable)()
 ], UpperOperator);
 var TrimOperator = class {
   static {
@@ -1896,8 +1783,8 @@ var TrimOperator = class {
     return value !== null && value !== void 0 ? String(value).trim() : "";
   }
 };
-TrimOperator = _ts_decorate11([
-  (0, import_common11.Injectable)()
+TrimOperator = _ts_decorate10([
+  (0, import_common10.Injectable)()
 ], TrimOperator);
 var ConcatOperator = class {
   static {
@@ -1913,8 +1800,8 @@ var ConcatOperator = class {
     return parts.map((p) => String(engine.evaluate(p, record) ?? "")).join("");
   }
 };
-ConcatOperator = _ts_decorate11([
-  (0, import_common11.Injectable)()
+ConcatOperator = _ts_decorate10([
+  (0, import_common10.Injectable)()
 ], ConcatOperator);
 var DateAddOperator = class {
   static {
@@ -1934,8 +1821,8 @@ var DateAddOperator = class {
     return d ? d.add(amount, unit).format("YYYY-MM-DD HH:mm:ss") : "";
   }
 };
-DateAddOperator = _ts_decorate11([
-  (0, import_common11.Injectable)()
+DateAddOperator = _ts_decorate10([
+  (0, import_common10.Injectable)()
 ], DateAddOperator);
 var TimeDiffOperator = class {
   static {
@@ -1958,8 +1845,8 @@ var TimeDiffOperator = class {
     return Math.round(diff * 100) / 100;
   }
 };
-TimeDiffOperator = _ts_decorate11([
-  (0, import_common11.Injectable)()
+TimeDiffOperator = _ts_decorate10([
+  (0, import_common10.Injectable)()
 ], TimeDiffOperator);
 var AggregateOperator = class {
   static {
@@ -2002,8 +1889,8 @@ var AggregateOperator = class {
     }
   }
 };
-AggregateOperator = _ts_decorate11([
-  (0, import_common11.Injectable)()
+AggregateOperator = _ts_decorate10([
+  (0, import_common10.Injectable)()
 ], AggregateOperator);
 var DateTransformer = class {
   static {
@@ -2037,28 +1924,28 @@ var DateTransformer = class {
     return d.isValid() ? d : null;
   }
 };
-DateTransformer = _ts_decorate11([
-  (0, import_common11.Injectable)()
+DateTransformer = _ts_decorate10([
+  (0, import_common10.Injectable)()
 ], DateTransformer);
 
 // src/core/query/query.engine.ts
-function _ts_decorate12(decorators, target, key, desc) {
+function _ts_decorate11(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate12, "_ts_decorate");
-function _ts_metadata8(k, v) {
+__name(_ts_decorate11, "_ts_decorate");
+function _ts_metadata7(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata8, "_ts_metadata");
-function _ts_param6(paramIndex, decorator) {
+__name(_ts_metadata7, "_ts_metadata");
+function _ts_param5(paramIndex, decorator) {
   return function(target, key) {
     decorator(target, key, paramIndex);
   };
 }
-__name(_ts_param6, "_ts_param");
+__name(_ts_param5, "_ts_param");
 var QueryEngine = class _QueryEngine {
   static {
     __name(this, "QueryEngine");
@@ -2066,7 +1953,7 @@ var QueryEngine = class _QueryEngine {
   stages;
   stageRegistry;
   // 🚀 Cambiado a la instancia nativa del Logger de NestJS para mejor formato en consola
-  logger = new import_common12.Logger(_QueryEngine.name);
+  logger = new import_common11.Logger(_QueryEngine.name);
   constructor(stages) {
     this.stages = stages;
     this.stageRegistry = /* @__PURE__ */ new Map();
@@ -2188,29 +2075,29 @@ var QueryEngine = class _QueryEngine {
     return filter;
   }
 };
-QueryEngine = _ts_decorate12([
-  (0, import_common12.Injectable)(),
-  _ts_param6(0, (0, import_common12.Inject)(PIPELINE_STAGE)),
-  _ts_metadata8("design:type", Function),
-  _ts_metadata8("design:paramtypes", [
+QueryEngine = _ts_decorate11([
+  (0, import_common11.Injectable)(),
+  _ts_param5(0, (0, import_common11.Inject)(PIPELINE_STAGE)),
+  _ts_metadata7("design:type", Function),
+  _ts_metadata7("design:paramtypes", [
     Array
   ])
 ], QueryEngine);
 
 // src/core/engine/mutationEngine.ts
-var import_common13 = require("@nestjs/common");
-function _ts_decorate13(decorators, target, key, desc) {
+var import_common12 = require("@nestjs/common");
+function _ts_decorate12(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate13, "_ts_decorate");
+__name(_ts_decorate12, "_ts_decorate");
 var MutationEngine = class _MutationEngine {
   static {
     __name(this, "MutationEngine");
   }
-  logger = new import_common13.Logger(_MutationEngine.name);
+  logger = new import_common12.Logger(_MutationEngine.name);
   mutate(updateQuery, currentDoc) {
     const mutatedData = {
       ...currentDoc
@@ -2291,12 +2178,12 @@ var MutationEngine = class _MutationEngine {
     }
   }
 };
-MutationEngine = _ts_decorate13([
-  (0, import_common13.Injectable)()
+MutationEngine = _ts_decorate12([
+  (0, import_common12.Injectable)()
 ], MutationEngine);
 
 // src/stages/filtrado_y_transformacion.ts
-var import_common15 = require("@nestjs/common");
+var import_common14 = require("@nestjs/common");
 
 // src/stages/StageUtils.ts
 var StageUtils = {
@@ -2315,29 +2202,29 @@ var StageUtils = {
 };
 
 // src/stages/expression.engine.ts
-var import_common14 = require("@nestjs/common");
+var import_common13 = require("@nestjs/common");
 var import_dayjs3 = __toESM(require("dayjs"));
 var import_utc = __toESM(require("dayjs/plugin/utc"));
 var import_timezone2 = __toESM(require("dayjs/plugin/timezone"));
 var import_customParseFormat2 = __toESM(require("dayjs/plugin/customParseFormat"));
 var import_weekOfYear = __toESM(require("dayjs/plugin/weekOfYear"));
-function _ts_decorate14(decorators, target, key, desc) {
+function _ts_decorate13(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate14, "_ts_decorate");
-function _ts_metadata9(k, v) {
+__name(_ts_decorate13, "_ts_decorate");
+function _ts_metadata8(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata9, "_ts_metadata");
-function _ts_param7(paramIndex, decorator) {
+__name(_ts_metadata8, "_ts_metadata");
+function _ts_param6(paramIndex, decorator) {
   return function(target, key) {
     decorator(target, key, paramIndex);
   };
 }
-__name(_ts_param7, "_ts_param");
+__name(_ts_param6, "_ts_param");
 import_dayjs3.default.extend(import_utc.default);
 import_dayjs3.default.extend(import_timezone2.default);
 import_dayjs3.default.extend(import_customParseFormat2.default);
@@ -2348,7 +2235,7 @@ var ExpressionEngine = class _ExpressionEngine {
   }
   transforms;
   filters;
-  logger = new import_common14.Logger(_ExpressionEngine.name);
+  logger = new import_common13.Logger(_ExpressionEngine.name);
   transformRegistry = /* @__PURE__ */ new Map();
   filterRegistry = /* @__PURE__ */ new Map();
   constructor(transforms, filters) {
@@ -2484,36 +2371,36 @@ var ExpressionEngine = class _ExpressionEngine {
     return keys.length === 1 && keys[0].startsWith("$");
   }
 };
-ExpressionEngine = _ts_decorate14([
-  (0, import_common14.Injectable)(),
-  _ts_param7(0, (0, import_common14.Inject)(DATA_TRANSFORM_OPERATOR)),
-  _ts_param7(1, (0, import_common14.Inject)(FILTER_OPERATOR)),
-  _ts_metadata9("design:type", Function),
-  _ts_metadata9("design:paramtypes", [
+ExpressionEngine = _ts_decorate13([
+  (0, import_common13.Injectable)(),
+  _ts_param6(0, (0, import_common13.Inject)(DATA_TRANSFORM_OPERATOR)),
+  _ts_param6(1, (0, import_common13.Inject)(FILTER_OPERATOR)),
+  _ts_metadata8("design:type", Function),
+  _ts_metadata8("design:paramtypes", [
     Array,
     Array
   ])
 ], ExpressionEngine);
 
 // src/stages/filtrado_y_transformacion.ts
-function _ts_decorate15(decorators, target, key, desc) {
+function _ts_decorate14(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate15, "_ts_decorate");
-function _ts_metadata10(k, v) {
+__name(_ts_decorate14, "_ts_decorate");
+function _ts_metadata9(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata10, "_ts_metadata");
+__name(_ts_metadata9, "_ts_metadata");
 var MatchStage = class _MatchStage {
   static {
     __name(this, "MatchStage");
   }
   engine;
   operator = "$match";
-  logger = new import_common15.Logger(_MatchStage.name);
+  logger = new import_common14.Logger(_MatchStage.name);
   constructor(engine) {
     this.engine = engine;
   }
@@ -2563,10 +2450,10 @@ var MatchStage = class _MatchStage {
     StageUtils.validateObject(config, this.operator);
   }
 };
-MatchStage = _ts_decorate15([
-  (0, import_common15.Injectable)(),
-  _ts_metadata10("design:type", Function),
-  _ts_metadata10("design:paramtypes", [
+MatchStage = _ts_decorate14([
+  (0, import_common14.Injectable)(),
+  _ts_metadata9("design:type", Function),
+  _ts_metadata9("design:paramtypes", [
     typeof ExpressionEngine === "undefined" ? Object : ExpressionEngine
   ])
 ], MatchStage);
@@ -2593,10 +2480,10 @@ var ProjectStage = class {
     StageUtils.validateObject(config, "$project");
   }
 };
-ProjectStage = _ts_decorate15([
-  (0, import_common15.Injectable)(),
-  _ts_metadata10("design:type", Function),
-  _ts_metadata10("design:paramtypes", [
+ProjectStage = _ts_decorate14([
+  (0, import_common14.Injectable)(),
+  _ts_metadata9("design:type", Function),
+  _ts_metadata9("design:paramtypes", [
     typeof ExpressionEngine === "undefined" ? Object : ExpressionEngine
   ])
 ], ProjectStage);
@@ -2606,7 +2493,7 @@ var AddFieldsStage = class _AddFieldsStage {
   }
   engine;
   operator = "$addFields";
-  logger = new import_common15.Logger(_AddFieldsStage.name);
+  logger = new import_common14.Logger(_AddFieldsStage.name);
   constructor(engine) {
     this.engine = engine;
   }
@@ -2632,23 +2519,23 @@ var AddFieldsStage = class _AddFieldsStage {
     }
   }
 };
-AddFieldsStage = _ts_decorate15([
-  (0, import_common15.Injectable)(),
-  _ts_metadata10("design:type", Function),
-  _ts_metadata10("design:paramtypes", [
+AddFieldsStage = _ts_decorate14([
+  (0, import_common14.Injectable)(),
+  _ts_metadata9("design:type", Function),
+  _ts_metadata9("design:paramtypes", [
     typeof ExpressionEngine === "undefined" ? Object : ExpressionEngine
   ])
 ], AddFieldsStage);
 
 // src/stages/orden_y_paginacion.ts
-var import_common16 = require("@nestjs/common");
-function _ts_decorate16(decorators, target, key, desc) {
+var import_common15 = require("@nestjs/common");
+function _ts_decorate15(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate16, "_ts_decorate");
+__name(_ts_decorate15, "_ts_decorate");
 var SortStage = class {
   static {
     __name(this, "SortStage");
@@ -2684,8 +2571,8 @@ var SortStage = class {
     }
   }
 };
-SortStage = _ts_decorate16([
-  (0, import_common16.Injectable)()
+SortStage = _ts_decorate15([
+  (0, import_common15.Injectable)()
 ], SortStage);
 var LimitStage = class {
   static {
@@ -2703,8 +2590,8 @@ var LimitStage = class {
     }
   }
 };
-LimitStage = _ts_decorate16([
-  (0, import_common16.Injectable)()
+LimitStage = _ts_decorate15([
+  (0, import_common15.Injectable)()
 ], LimitStage);
 var SkipStage = class {
   static {
@@ -2722,19 +2609,19 @@ var SkipStage = class {
     }
   }
 };
-SkipStage = _ts_decorate16([
-  (0, import_common16.Injectable)()
+SkipStage = _ts_decorate15([
+  (0, import_common15.Injectable)()
 ], SkipStage);
 
 // src/stages/filter.operators.ts
-var import_common17 = require("@nestjs/common");
-function _ts_decorate17(decorators, target, key, desc) {
+var import_common16 = require("@nestjs/common");
+function _ts_decorate16(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate17, "_ts_decorate");
+__name(_ts_decorate16, "_ts_decorate");
 var EqOperator = class {
   static {
     __name(this, "EqOperator");
@@ -2748,8 +2635,8 @@ var EqOperator = class {
     return engine.evaluate(args.val1, record) === engine.evaluate(args.val2, record);
   }
 };
-EqOperator = _ts_decorate17([
-  (0, import_common17.Injectable)()
+EqOperator = _ts_decorate16([
+  (0, import_common16.Injectable)()
 ], EqOperator);
 var NeOperator = class {
   static {
@@ -2764,8 +2651,8 @@ var NeOperator = class {
     return engine.evaluate(args.val1, record) !== engine.evaluate(args.val2, record);
   }
 };
-NeOperator = _ts_decorate17([
-  (0, import_common17.Injectable)()
+NeOperator = _ts_decorate16([
+  (0, import_common16.Injectable)()
 ], NeOperator);
 var GtOperator = class {
   static {
@@ -2783,8 +2670,8 @@ var GtOperator = class {
     return !isNaN(v1) && !isNaN(v2) ? v1 > v2 : false;
   }
 };
-GtOperator = _ts_decorate17([
-  (0, import_common17.Injectable)()
+GtOperator = _ts_decorate16([
+  (0, import_common16.Injectable)()
 ], GtOperator);
 var GteOperator = class {
   static {
@@ -2801,8 +2688,8 @@ var GteOperator = class {
     return !isNaN(v1) && !isNaN(v2) ? v1 >= v2 : false;
   }
 };
-GteOperator = _ts_decorate17([
-  (0, import_common17.Injectable)()
+GteOperator = _ts_decorate16([
+  (0, import_common16.Injectable)()
 ], GteOperator);
 var LtOperator = class {
   static {
@@ -2819,8 +2706,8 @@ var LtOperator = class {
     return !isNaN(v1) && !isNaN(v2) ? v1 < v2 : false;
   }
 };
-LtOperator = _ts_decorate17([
-  (0, import_common17.Injectable)()
+LtOperator = _ts_decorate16([
+  (0, import_common16.Injectable)()
 ], LtOperator);
 var LteOperator = class {
   static {
@@ -2837,8 +2724,8 @@ var LteOperator = class {
     return !isNaN(v1) && !isNaN(v2) ? v1 <= v2 : false;
   }
 };
-LteOperator = _ts_decorate17([
-  (0, import_common17.Injectable)()
+LteOperator = _ts_decorate16([
+  (0, import_common16.Injectable)()
 ], LteOperator);
 var InOperator = class {
   static {
@@ -2857,8 +2744,8 @@ var InOperator = class {
     return arr.some((item) => String(engine.evaluate(item, record) ?? "").trim() === normalizedVal);
   }
 };
-InOperator = _ts_decorate17([
-  (0, import_common17.Injectable)()
+InOperator = _ts_decorate16([
+  (0, import_common16.Injectable)()
 ], InOperator);
 var NinOperator = class {
   static {
@@ -2874,8 +2761,8 @@ var NinOperator = class {
     return !inOp.exec(args, record, engine);
   }
 };
-NinOperator = _ts_decorate17([
-  (0, import_common17.Injectable)()
+NinOperator = _ts_decorate16([
+  (0, import_common16.Injectable)()
 ], NinOperator);
 var ExistsOperator = class {
   static {
@@ -2890,8 +2777,8 @@ var ExistsOperator = class {
     return val !== void 0 && val !== null && String(val).trim() !== "";
   }
 };
-ExistsOperator = _ts_decorate17([
-  (0, import_common17.Injectable)()
+ExistsOperator = _ts_decorate16([
+  (0, import_common16.Injectable)()
 ], ExistsOperator);
 var RegexOperator = class {
   static {
@@ -2915,8 +2802,8 @@ var RegexOperator = class {
     }
   }
 };
-RegexOperator = _ts_decorate17([
-  (0, import_common17.Injectable)()
+RegexOperator = _ts_decorate16([
+  (0, import_common16.Injectable)()
 ], RegexOperator);
 var SameWeekOperator = class {
   static {
@@ -2934,8 +2821,8 @@ var SameWeekOperator = class {
     return d1.year() === d2.year() && d1.week() === d2.week();
   }
 };
-SameWeekOperator = _ts_decorate17([
-  (0, import_common17.Injectable)()
+SameWeekOperator = _ts_decorate16([
+  (0, import_common16.Injectable)()
 ], SameWeekOperator);
 var DayOfWeekOperator = class {
   static {
@@ -2953,8 +2840,8 @@ var DayOfWeekOperator = class {
     return d.day() === targetDay;
   }
 };
-DayOfWeekOperator = _ts_decorate17([
-  (0, import_common17.Injectable)()
+DayOfWeekOperator = _ts_decorate16([
+  (0, import_common16.Injectable)()
 ], DayOfWeekOperator);
 var YearWeekOperator = class {
   static {
@@ -2983,8 +2870,8 @@ var YearWeekOperator = class {
     return d.year() === targetYear && d.week() === targetWeek;
   }
 };
-YearWeekOperator = _ts_decorate17([
-  (0, import_common17.Injectable)()
+YearWeekOperator = _ts_decorate16([
+  (0, import_common16.Injectable)()
 ], YearWeekOperator);
 var DateBetweenOperator = class {
   static {
@@ -3004,36 +2891,37 @@ var DateBetweenOperator = class {
     return (d.isSame(start, "day") || d.isAfter(start, "day")) && (d.isSame(end, "day") || d.isBefore(end, "day"));
   }
 };
-DateBetweenOperator = _ts_decorate17([
-  (0, import_common17.Injectable)()
+DateBetweenOperator = _ts_decorate16([
+  (0, import_common16.Injectable)()
 ], DateBetweenOperator);
 
 // src/adapters/postgres.provider.ts
-var import_common18 = require("@nestjs/common");
+var import_common17 = require("@nestjs/common");
 var import_pg = require("pg");
-function _ts_decorate18(decorators, target, key, desc) {
+var import_auth5 = require("@spreadsheet/auth");
+function _ts_decorate17(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate18, "_ts_decorate");
-function _ts_metadata11(k, v) {
+__name(_ts_decorate17, "_ts_decorate");
+function _ts_metadata10(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata11, "_ts_metadata");
-function _ts_param8(paramIndex, decorator) {
+__name(_ts_metadata10, "_ts_metadata");
+function _ts_param7(paramIndex, decorator) {
   return function(target, key) {
     decorator(target, key, paramIndex);
   };
 }
-__name(_ts_param8, "_ts_param");
+__name(_ts_param7, "_ts_param");
 var PostgresProvider = class _PostgresProvider {
   static {
     __name(this, "PostgresProvider");
   }
   config;
-  logger = new import_common18.Logger(_PostgresProvider.name);
+  logger = new import_common17.Logger(_PostgresProvider.name);
   pool;
   constructor(config) {
     this.config = config;
@@ -3169,35 +3057,35 @@ var PostgresProvider = class _PostgresProvider {
     return this.pool.connect();
   }
 };
-PostgresProvider = _ts_decorate18([
-  (0, import_common18.Injectable)(),
-  _ts_param8(0, (0, import_common18.Inject)(SHEET_ODM_OPTIONS)),
-  _ts_metadata11("design:type", Function),
-  _ts_metadata11("design:paramtypes", [
+PostgresProvider = _ts_decorate17([
+  (0, import_common17.Injectable)(),
+  _ts_param7(0, (0, import_common17.Inject)(import_auth5.SHEET_ODM_OPTIONS)),
+  _ts_metadata10("design:type", Function),
+  _ts_metadata10("design:paramtypes", [
     typeof SheetOdmModuleOptions === "undefined" ? Object : SheetOdmModuleOptions
   ])
 ], PostgresProvider);
 
 // src/infrastructure/InfrastructureProvisioner.ts
-var import_common19 = require("@nestjs/common");
-function _ts_decorate19(decorators, target, key, desc) {
+var import_common18 = require("@nestjs/common");
+function _ts_decorate18(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate19, "_ts_decorate");
-function _ts_metadata12(k, v) {
+__name(_ts_decorate18, "_ts_decorate");
+function _ts_metadata11(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata12, "_ts_metadata");
+__name(_ts_metadata11, "_ts_metadata");
 var InfrastructureProvisioner = class _InfrastructureProvisioner {
   static {
     __name(this, "InfrastructureProvisioner");
   }
   gateway;
   registry;
-  logger = new import_common19.Logger(_InfrastructureProvisioner.name);
+  logger = new import_common18.Logger(_InfrastructureProvisioner.name);
   constructor(gateway, registry) {
     this.gateway = gateway;
     this.registry = registry;
@@ -3323,43 +3211,43 @@ var InfrastructureProvisioner = class _InfrastructureProvisioner {
     });
   }
 };
-InfrastructureProvisioner = _ts_decorate19([
-  (0, import_common19.Injectable)(),
-  _ts_metadata12("design:type", Function),
-  _ts_metadata12("design:paramtypes", [
+InfrastructureProvisioner = _ts_decorate18([
+  (0, import_common18.Injectable)(),
+  _ts_metadata11("design:type", Function),
+  _ts_metadata11("design:paramtypes", [
     typeof SheetDataGateway === "undefined" ? Object : SheetDataGateway,
     typeof MetadataRegistry === "undefined" ? Object : MetadataRegistry
   ])
 ], InfrastructureProvisioner);
 
 // src/core/outbox/outbox.module.ts
-var import_common23 = require("@nestjs/common");
+var import_common22 = require("@nestjs/common");
 
 // src/core/outbox/services/postgres-outbox.service.ts
-var import_common20 = require("@nestjs/common");
-function _ts_decorate20(decorators, target, key, desc) {
+var import_common19 = require("@nestjs/common");
+function _ts_decorate19(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate20, "_ts_decorate");
-function _ts_metadata13(k, v) {
+__name(_ts_decorate19, "_ts_decorate");
+function _ts_metadata12(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata13, "_ts_metadata");
-function _ts_param9(paramIndex, decorator) {
+__name(_ts_metadata12, "_ts_metadata");
+function _ts_param8(paramIndex, decorator) {
   return function(target, key) {
     decorator(target, key, paramIndex);
   };
 }
-__name(_ts_param9, "_ts_param");
+__name(_ts_param8, "_ts_param");
 var PostgresOutboxService = class _PostgresOutboxService extends OutboxService {
   static {
     __name(this, "PostgresOutboxService");
   }
   pg;
-  logger = new import_common20.Logger(_PostgresOutboxService.name);
+  logger = new import_common19.Logger(_PostgresOutboxService.name);
   constructor(pg) {
     super(), this.pg = pg;
   }
@@ -3426,17 +3314,17 @@ var PostgresOutboxService = class _PostgresOutboxService extends OutboxService {
     }
   }
 };
-PostgresOutboxService = _ts_decorate20([
-  (0, import_common20.Injectable)(),
-  _ts_param9(0, (0, import_common20.Inject)("POSTGRES_PROVIDER")),
-  _ts_metadata13("design:type", Function),
-  _ts_metadata13("design:paramtypes", [
+PostgresOutboxService = _ts_decorate19([
+  (0, import_common19.Injectable)(),
+  _ts_param8(0, (0, import_common19.Inject)("POSTGRES_PROVIDER")),
+  _ts_metadata12("design:type", Function),
+  _ts_metadata12("design:paramtypes", [
     typeof IPostgresProvider === "undefined" ? Object : IPostgresProvider
   ])
 ], PostgresOutboxService);
 
 // src/core/outbox/outbox.processor.ts
-var import_common22 = require("@nestjs/common");
+var import_common21 = require("@nestjs/common");
 var import_core = require("@nestjs/core");
 
 // src/utils/getRepositoryToken.ts
@@ -3471,8 +3359,8 @@ var CacheKeys = {
 };
 
 // src/core/model/model.factory.ts
-var import_common21 = require("@nestjs/common");
-var InjectModel = /* @__PURE__ */ __name((entity) => (0, import_common21.Inject)(`${entity.name}Model`), "InjectModel");
+var import_common20 = require("@nestjs/common");
+var InjectModel = /* @__PURE__ */ __name((entity) => (0, import_common20.Inject)(`${entity.name}Model`), "InjectModel");
 function createModel(entityClass, repo) {
   let DocumentModel = class DocumentModel2 {
     static {
@@ -3481,7 +3369,7 @@ function createModel(entityClass, repo) {
     logger;
     constructor(data = {}) {
       Object.defineProperty(this, "logger", {
-        value: new import_common21.Logger(`Model<${entityClass.name}>`),
+        value: new import_common20.Logger(`Model<${entityClass.name}>`),
         writable: false,
         enumerable: false
       });
@@ -3628,23 +3516,24 @@ function createModel(entityClass, repo) {
 __name(createModel, "createModel");
 
 // src/core/outbox/outbox.processor.ts
-function _ts_decorate21(decorators, target, key, desc) {
+var import_auth6 = require("@spreadsheet/auth");
+function _ts_decorate20(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate21, "_ts_decorate");
-function _ts_metadata14(k, v) {
+__name(_ts_decorate20, "_ts_decorate");
+function _ts_metadata13(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata14, "_ts_metadata");
-function _ts_param10(paramIndex, decorator) {
+__name(_ts_metadata13, "_ts_metadata");
+function _ts_param9(paramIndex, decorator) {
   return function(target, key) {
     decorator(target, key, paramIndex);
   };
 }
-__name(_ts_param10, "_ts_param");
+__name(_ts_param9, "_ts_param");
 var OutboxProcessor = class _OutboxProcessor {
   static {
     __name(this, "OutboxProcessor");
@@ -3654,7 +3543,7 @@ var OutboxProcessor = class _OutboxProcessor {
   options;
   metadataRegistry;
   cacheManager;
-  logger = new import_common22.Logger(_OutboxProcessor.name);
+  logger = new import_common21.Logger(_OutboxProcessor.name);
   isRunning = false;
   isShuttingDown = false;
   timeoutId;
@@ -3900,13 +3789,13 @@ var OutboxProcessor = class _OutboxProcessor {
     }
   }
 };
-OutboxProcessor = _ts_decorate21([
-  (0, import_common22.Injectable)(),
-  _ts_param10(1, (0, import_common22.Inject)(POSTGRES_TOKEN)),
-  _ts_param10(2, (0, import_common22.Inject)(SHEET_ODM_OPTIONS)),
-  _ts_param10(4, (0, import_common22.Inject)(import_cache_manager.CACHE_MANAGER)),
-  _ts_metadata14("design:type", Function),
-  _ts_metadata14("design:paramtypes", [
+OutboxProcessor = _ts_decorate20([
+  (0, import_common21.Injectable)(),
+  _ts_param9(1, (0, import_common21.Inject)(POSTGRES_TOKEN)),
+  _ts_param9(2, (0, import_common21.Inject)(import_auth6.SHEET_ODM_OPTIONS)),
+  _ts_param9(4, (0, import_common21.Inject)(import_cache_manager.CACHE_MANAGER)),
+  _ts_metadata13("design:type", Function),
+  _ts_metadata13("design:paramtypes", [
     typeof import_core.ModuleRef === "undefined" ? Object : import_core.ModuleRef,
     typeof IPostgresProvider === "undefined" ? Object : IPostgresProvider,
     typeof SheetOdmModuleOptions === "undefined" ? Object : SheetOdmModuleOptions,
@@ -3916,13 +3805,14 @@ OutboxProcessor = _ts_decorate21([
 ], OutboxProcessor);
 
 // src/core/outbox/outbox.module.ts
-function _ts_decorate22(decorators, target, key, desc) {
+var import_auth7 = require("@spreadsheet/auth");
+function _ts_decorate21(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate22, "_ts_decorate");
+__name(_ts_decorate21, "_ts_decorate");
 var OutboxModule = class _OutboxModule {
   static {
     __name(this, "OutboxModule");
@@ -3937,7 +3827,7 @@ var OutboxModule = class _OutboxModule {
           useClass: PostgresOutboxService
         },
         {
-          provide: SHEET_ODM_OPTIONS,
+          provide: import_auth7.SHEET_ODM_OPTIONS,
           useValue: options
         }
       ],
@@ -3954,7 +3844,7 @@ var OutboxModule = class _OutboxModule {
       imports: options.imports || [],
       providers: [
         {
-          provide: SHEET_ODM_OPTIONS,
+          provide: import_auth7.SHEET_ODM_OPTIONS,
           useFactory: options.useFactory,
           inject: options.inject || []
         },
@@ -3971,32 +3861,32 @@ var OutboxModule = class _OutboxModule {
     };
   }
 };
-OutboxModule = _ts_decorate22([
-  (0, import_common23.Module)({})
+OutboxModule = _ts_decorate21([
+  (0, import_common22.Module)({})
 ], OutboxModule);
 
 // src/core/uow/uow.module.ts
-var import_common25 = require("@nestjs/common");
+var import_common24 = require("@nestjs/common");
 
 // src/core/uow/services/unit-of-work.service.ts
-var import_common24 = require("@nestjs/common");
-function _ts_decorate23(decorators, target, key, desc) {
+var import_common23 = require("@nestjs/common");
+function _ts_decorate22(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate23, "_ts_decorate");
-function _ts_metadata15(k, v) {
+__name(_ts_decorate22, "_ts_decorate");
+function _ts_metadata14(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata15, "_ts_metadata");
+__name(_ts_metadata14, "_ts_metadata");
 var UnitOfWork = class _UnitOfWork {
   static {
     __name(this, "UnitOfWork");
   }
   outboxService;
-  logger = new import_common24.Logger(_UnitOfWork.name);
+  logger = new import_common23.Logger(_UnitOfWork.name);
   identityMap = /* @__PURE__ */ new Map();
   pendingOperations = [];
   isTransactional = false;
@@ -4097,31 +3987,31 @@ var UnitOfWork = class _UnitOfWork {
     }
   }
 };
-UnitOfWork = _ts_decorate23([
-  (0, import_common24.Injectable)({
-    scope: import_common24.Scope.REQUEST
+UnitOfWork = _ts_decorate22([
+  (0, import_common23.Injectable)({
+    scope: import_common23.Scope.REQUEST
   }),
-  _ts_metadata15("design:type", Function),
-  _ts_metadata15("design:paramtypes", [
+  _ts_metadata14("design:type", Function),
+  _ts_metadata14("design:paramtypes", [
     typeof OutboxService === "undefined" ? Object : OutboxService
   ])
 ], UnitOfWork);
 
 // src/core/uow/uow.module.ts
-function _ts_decorate24(decorators, target, key, desc) {
+function _ts_decorate23(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate24, "_ts_decorate");
+__name(_ts_decorate23, "_ts_decorate");
 var UowModule = class {
   static {
     __name(this, "UowModule");
   }
 };
-UowModule = _ts_decorate24([
-  (0, import_common25.Module)({
+UowModule = _ts_decorate23([
+  (0, import_common24.Module)({
     // Importamos el OutboxModule porque UoW necesita usar el PostgresOutboxService
     imports: [
       OutboxModule
@@ -4137,24 +4027,24 @@ UowModule = _ts_decorate24([
 ], UowModule);
 
 // src/core/diagnostic/odm-diagnostics.service.ts
-var import_common26 = require("@nestjs/common");
-function _ts_decorate25(decorators, target, key, desc) {
+var import_common25 = require("@nestjs/common");
+function _ts_decorate24(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate25, "_ts_decorate");
-function _ts_metadata16(k, v) {
+__name(_ts_decorate24, "_ts_decorate");
+function _ts_metadata15(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata16, "_ts_metadata");
-function _ts_param11(paramIndex, decorator) {
+__name(_ts_metadata15, "_ts_metadata");
+function _ts_param10(paramIndex, decorator) {
   return function(target, key) {
     decorator(target, key, paramIndex);
   };
 }
-__name(_ts_param11, "_ts_param");
+__name(_ts_param10, "_ts_param");
 var OdmDiagnosticsService = class {
   static {
     __name(this, "OdmDiagnosticsService");
@@ -4237,34 +4127,34 @@ var OdmDiagnosticsService = class {
     return query.rows;
   }
 };
-OdmDiagnosticsService = _ts_decorate25([
-  (0, import_common26.Injectable)(),
-  _ts_param11(0, (0, import_common26.Inject)(POSTGRES_TOKEN)),
-  _ts_metadata16("design:type", Function),
-  _ts_metadata16("design:paramtypes", [
+OdmDiagnosticsService = _ts_decorate24([
+  (0, import_common25.Injectable)(),
+  _ts_param10(0, (0, import_common25.Inject)(POSTGRES_TOKEN)),
+  _ts_metadata15("design:type", Function),
+  _ts_metadata15("design:paramtypes", [
     typeof IPostgresProvider === "undefined" ? Object : IPostgresProvider
   ])
 ], OdmDiagnosticsService);
 
 // src/core/diagnostic/odm-diagnostics.controller.ts
-var import_common27 = require("@nestjs/common");
-function _ts_decorate26(decorators, target, key, desc) {
+var import_common26 = require("@nestjs/common");
+function _ts_decorate25(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate26, "_ts_decorate");
-function _ts_metadata17(k, v) {
+__name(_ts_decorate25, "_ts_decorate");
+function _ts_metadata16(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata17, "_ts_metadata");
-function _ts_param12(paramIndex, decorator) {
+__name(_ts_metadata16, "_ts_metadata");
+function _ts_param11(paramIndex, decorator) {
   return function(target, key) {
     decorator(target, key, paramIndex);
   };
 }
-__name(_ts_param12, "_ts_param");
+__name(_ts_param11, "_ts_param");
 var OdmDiagnosticsController = class {
   static {
     __name(this, "OdmDiagnosticsController");
@@ -4293,41 +4183,41 @@ var OdmDiagnosticsController = class {
     return this.diagnostics.getRecentErrors(parsedLimit);
   }
 };
-_ts_decorate26([
-  (0, import_common27.Get)("health"),
-  _ts_metadata17("design:type", Function),
-  _ts_metadata17("design:paramtypes", []),
-  _ts_metadata17("design:returntype", Promise)
+_ts_decorate25([
+  (0, import_common26.Get)("health"),
+  _ts_metadata16("design:type", Function),
+  _ts_metadata16("design:paramtypes", []),
+  _ts_metadata16("design:returntype", Promise)
 ], OdmDiagnosticsController.prototype, "getHealth", null);
-_ts_decorate26([
-  (0, import_common27.Get)("queue"),
-  _ts_metadata17("design:type", Function),
-  _ts_metadata17("design:paramtypes", []),
-  _ts_metadata17("design:returntype", Promise)
+_ts_decorate25([
+  (0, import_common26.Get)("queue"),
+  _ts_metadata16("design:type", Function),
+  _ts_metadata16("design:paramtypes", []),
+  _ts_metadata16("design:returntype", Promise)
 ], OdmDiagnosticsController.prototype, "getQueue", null);
-_ts_decorate26([
-  (0, import_common27.Get)("errors"),
-  _ts_param12(0, (0, import_common27.Query)("limit")),
-  _ts_metadata17("design:type", Function),
-  _ts_metadata17("design:paramtypes", [
+_ts_decorate25([
+  (0, import_common26.Get)("errors"),
+  _ts_param11(0, (0, import_common26.Query)("limit")),
+  _ts_metadata16("design:type", Function),
+  _ts_metadata16("design:paramtypes", [
     String
   ]),
-  _ts_metadata17("design:returntype", Promise)
+  _ts_metadata16("design:returntype", Promise)
 ], OdmDiagnosticsController.prototype, "getErrors", null);
-OdmDiagnosticsController = _ts_decorate26([
-  (0, import_common27.Controller)("api/odm/diagnostics"),
-  _ts_metadata17("design:type", Function),
-  _ts_metadata17("design:paramtypes", [
+OdmDiagnosticsController = _ts_decorate25([
+  (0, import_common26.Controller)("api/odm/diagnostics"),
+  _ts_metadata16("design:type", Function),
+  _ts_metadata16("design:paramtypes", [
     typeof OdmDiagnosticsService === "undefined" ? Object : OdmDiagnosticsService
   ])
 ], OdmDiagnosticsController);
 
 // src/core/repository/sheets-repository.factory.ts
-var import_common35 = require("@nestjs/common");
+var import_common34 = require("@nestjs/common");
 var import_core2 = require("@nestjs/core");
 
 // src/core/repository/sheets.repository.ts
-var import_common28 = require("@nestjs/common");
+var import_common27 = require("@nestjs/common");
 var SheetsRepository = class {
   static {
     __name(this, "SheetsRepository");
@@ -4348,7 +4238,7 @@ var SheetsRepository = class {
   documentModelConstructor;
   constructor(entityClass, core) {
     this.entityClass = entityClass;
-    this.logger = new import_common28.Logger(`Repository<${this.entityClass.name}>`);
+    this.logger = new import_common27.Logger(`Repository<${this.entityClass.name}>`);
     this.metadata = core.metadata;
     this.dataSource = core.dataSource;
     this.uow = core.uow;
@@ -4375,6 +4265,23 @@ var SheetsRepository = class {
    * 🔍 BÚSQUEDA ÚNICA
    */
   async findOne(filter, options) {
+    const cachedItems = await this.cacheManager.get(this.getCacheKey());
+    if (cachedItems && cachedItems.length > 0 && filter) {
+      const propertyName = Object.keys(filter)[0];
+      const searchValue = String(filter[propertyName]);
+      const schema = this.metadata.getSchema(this.entityClass);
+      const colConfig = schema.columns[propertyName];
+      const rawColName = colConfig?.name || propertyName;
+      const foundRaw = cachedItems.find((item) => String(item[rawColName] ?? item[propertyName]) === searchValue);
+      if (foundRaw) {
+        this.logger.debug(`[Cache Hit] findOne resuelto desde RAM para [${this.sheetName}]`);
+        const instance = this.hydrateAndCacheRawResult(foundRaw, options);
+        await this.applyRelations([
+          instance
+        ], options);
+        return instance;
+      }
+    }
     if (this.canUseIndexedRead(filter, options)) {
       const propertyName = Object.keys(filter)[0];
       const searchValue = String(filter[propertyName]);
@@ -4540,12 +4447,12 @@ var SheetsRepository = class {
         pk
       });
       for (const childMut of childMutations) {
-        const childSheetName = this.metadata.getSchema(childMut.entityClass).sheetName;
+        const childSchema = this.metadata.getSchema(childMut.entityClass);
         const childPkField = this.metadata.getPrimaryKeyField(childMut.entityClass);
         this.uow.queueOperation({
           type: childMut.operation,
           entityClass: childMut.entityClass,
-          sheetName: childSheetName,
+          sheetName: childSchema.sheetName,
           doc: childMut.payload,
           pk: childMut.payload[childPkField]
         });
@@ -4557,6 +4464,7 @@ var SheetsRepository = class {
     for (const childMut of childMutations) {
       await this.dataSource.dispatchMutation(childMut.entityClass, childMut.operation, childMut.payload, childMut.payload);
     }
+    await this.syncOptimisticCache(doc, operation, childMutations);
     return doc;
   }
   /**
@@ -4578,6 +4486,7 @@ var SheetsRepository = class {
       return true;
     }
     await this.dataSource.dispatchMutation(this.entityClass, TypeOp.DELETE, doc.toJSON(), doc.toJSON());
+    await this.syncOptimisticCache(doc, TypeOp.DELETE);
     return true;
   }
   /**
@@ -4727,40 +4636,87 @@ var SheetsRepository = class {
   createAggregation() {
     return this.aggregationFactory.create();
   }
+  async syncOptimisticCache(doc, op, childMutations = []) {
+    const pkField = this.getPrimaryKeyField();
+    const pkValue = doc.getPrimaryKeyValue(pkField);
+    await this.syncEntityCache(this.entityClass, doc.toJSON(), op, pkValue);
+    for (const child of childMutations) {
+      const childPkField = this.metadata.getPrimaryKeyField(child.entityClass);
+      const childPkValue = child.payload[childPkField];
+      await this.syncEntityCache(child.entityClass, child.payload, child.operation, childPkValue);
+    }
+  }
+  async syncEntityCache(entityClass, payload, op, pkValue) {
+    const schema = this.metadata.getSchema(entityClass);
+    const cacheKey = CacheKeys.SHEET_DATA(schema.sheetName);
+    const cachedItems = await this.cacheManager.get(cacheKey) || [];
+    const pkField = this.metadata.getPrimaryKeyField(entityClass);
+    if (op === TypeOp.INSERT) {
+      cachedItems.push(payload);
+    } else if (op === TypeOp.UPDATE) {
+      const index = cachedItems.findIndex((item) => {
+        const itemPk = item[pkField] ?? item.id ?? item.ID;
+        return String(itemPk) === String(pkValue) || payload._row && item._row === payload._row;
+      });
+      if (index !== -1) {
+        cachedItems[index] = {
+          ...cachedItems[index],
+          ...payload
+        };
+      } else {
+        cachedItems.push(payload);
+      }
+    } else if (op === TypeOp.DELETE) {
+      const deleteControlProp = schema.deleteControl;
+      const index = cachedItems.findIndex((item) => {
+        const itemPk = item[pkField] ?? item.id ?? item.ID;
+        return String(itemPk) === String(pkValue) || payload._row && item._row === payload._row;
+      });
+      if (index !== -1) {
+        if (deleteControlProp) {
+          cachedItems[index][deleteControlProp] = true;
+        } else {
+          cachedItems.splice(index, 1);
+        }
+      }
+    }
+    await this.cacheManager.set(cacheKey, cachedItems);
+    this.logger.debug(`[Cache Sync] RAM actualizada para [${schema.sheetName}] (Op: ${op}) PK: ${pkValue}`);
+  }
 };
 
 // src/core/repository/repository-core.facade.ts
-var import_common34 = require("@nestjs/common");
+var import_common33 = require("@nestjs/common");
 var import_cache_manager2 = require("@nestjs/cache-manager");
 
 // src/stages/aggregation.builder.ts
-var import_common30 = require("@nestjs/common");
+var import_common29 = require("@nestjs/common");
 
 // src/stages/pipeline.registry.ts
-var import_common29 = require("@nestjs/common");
-function _ts_decorate27(decorators, target, key, desc) {
+var import_common28 = require("@nestjs/common");
+function _ts_decorate26(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate27, "_ts_decorate");
-function _ts_metadata18(k, v) {
+__name(_ts_decorate26, "_ts_decorate");
+function _ts_metadata17(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata18, "_ts_metadata");
-function _ts_param13(paramIndex, decorator) {
+__name(_ts_metadata17, "_ts_metadata");
+function _ts_param12(paramIndex, decorator) {
   return function(target, key) {
     decorator(target, key, paramIndex);
   };
 }
-__name(_ts_param13, "_ts_param");
+__name(_ts_param12, "_ts_param");
 var PipelineOrchestrator = class _PipelineOrchestrator {
   static {
     __name(this, "PipelineOrchestrator");
   }
   stages;
-  logger = new import_common29.Logger(_PipelineOrchestrator.name);
+  logger = new import_common28.Logger(_PipelineOrchestrator.name);
   stagesMap = /* @__PURE__ */ new Map();
   constructor(stages) {
     this.stages = stages;
@@ -4800,27 +4756,27 @@ var PipelineOrchestrator = class _PipelineOrchestrator {
     return result;
   }
 };
-PipelineOrchestrator = _ts_decorate27([
-  (0, import_common29.Injectable)(),
-  _ts_param13(0, (0, import_common29.Inject)(PIPELINE_STAGE)),
-  _ts_metadata18("design:type", Function),
-  _ts_metadata18("design:paramtypes", [
+PipelineOrchestrator = _ts_decorate26([
+  (0, import_common28.Injectable)(),
+  _ts_param12(0, (0, import_common28.Inject)(PIPELINE_STAGE)),
+  _ts_metadata17("design:type", Function),
+  _ts_metadata17("design:paramtypes", [
     Array
   ])
 ], PipelineOrchestrator);
 
 // src/stages/aggregation.builder.ts
-function _ts_decorate28(decorators, target, key, desc) {
+function _ts_decorate27(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate28, "_ts_decorate");
-function _ts_metadata19(k, v) {
+__name(_ts_decorate27, "_ts_decorate");
+function _ts_metadata18(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata19, "_ts_metadata");
+__name(_ts_metadata18, "_ts_metadata");
 var AggregationBuilder = class {
   static {
     __name(this, "AggregationBuilder");
@@ -4926,27 +4882,27 @@ var AggregationBuilder = class {
     }
   }
 };
-AggregationBuilder = _ts_decorate28([
-  (0, import_common30.Injectable)(),
-  _ts_metadata19("design:type", Function),
-  _ts_metadata19("design:paramtypes", [
+AggregationBuilder = _ts_decorate27([
+  (0, import_common29.Injectable)(),
+  _ts_metadata18("design:type", Function),
+  _ts_metadata18("design:paramtypes", [
     typeof PipelineOrchestrator === "undefined" ? Object : PipelineOrchestrator
   ])
 ], AggregationBuilder);
 
 // src/stages/interfaces/aggregation.factory.ts
-var import_common31 = require("@nestjs/common");
-function _ts_decorate29(decorators, target, key, desc) {
+var import_common30 = require("@nestjs/common");
+function _ts_decorate28(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate29, "_ts_decorate");
-function _ts_metadata20(k, v) {
+__name(_ts_decorate28, "_ts_decorate");
+function _ts_metadata19(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata20, "_ts_metadata");
+__name(_ts_metadata19, "_ts_metadata");
 var AggregationFactory = class {
   static {
     __name(this, "AggregationFactory");
@@ -4963,19 +4919,19 @@ var AggregationFactory = class {
     return new AggregationBuilder(this.orchestrator);
   }
 };
-AggregationFactory = _ts_decorate29([
-  (0, import_common31.Injectable)(),
-  _ts_metadata20("design:type", Function),
-  _ts_metadata20("design:paramtypes", [
+AggregationFactory = _ts_decorate28([
+  (0, import_common30.Injectable)(),
+  _ts_metadata19("design:type", Function),
+  _ts_metadata19("design:paramtypes", [
     typeof PipelineOrchestrator === "undefined" ? Object : PipelineOrchestrator
   ])
 ], AggregationFactory);
 
 // src/JoinSheetTabs/JoinSheetTabsService.ts
-var import_common33 = require("@nestjs/common");
+var import_common32 = require("@nestjs/common");
 
 // src/JoinSheetTabs/JoinEngine.ts
-var import_common32 = require("@nestjs/common");
+var import_common31 = require("@nestjs/common");
 
 // src/core/repository/repository.registry.ts
 var RepositoryRegistry = class {
@@ -4996,23 +4952,23 @@ var RepositoryRegistry = class {
 };
 
 // src/JoinSheetTabs/JoinEngine.ts
-function _ts_decorate30(decorators, target, key, desc) {
+function _ts_decorate29(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate30, "_ts_decorate");
-function _ts_metadata21(k, v) {
+__name(_ts_decorate29, "_ts_decorate");
+function _ts_metadata20(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata21, "_ts_metadata");
+__name(_ts_metadata20, "_ts_metadata");
 var JoinEngine = class _JoinEngine {
   static {
     __name(this, "JoinEngine");
   }
   metadataRegistry;
-  logger = new import_common32.Logger(_JoinEngine.name);
+  logger = new import_common31.Logger(_JoinEngine.name);
   constructor(metadataRegistry) {
     this.metadataRegistry = metadataRegistry;
   }
@@ -5057,32 +5013,32 @@ var JoinEngine = class _JoinEngine {
     });
   }
 };
-JoinEngine = _ts_decorate30([
-  (0, import_common32.Injectable)(),
-  _ts_metadata21("design:type", Function),
-  _ts_metadata21("design:paramtypes", [
+JoinEngine = _ts_decorate29([
+  (0, import_common31.Injectable)(),
+  _ts_metadata20("design:type", Function),
+  _ts_metadata20("design:paramtypes", [
     typeof MetadataRegistry === "undefined" ? Object : MetadataRegistry
   ])
 ], JoinEngine);
 
 // src/JoinSheetTabs/JoinSheetTabsService.ts
-function _ts_decorate31(decorators, target, key, desc) {
+function _ts_decorate30(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate31, "_ts_decorate");
-function _ts_metadata22(k, v) {
+__name(_ts_decorate30, "_ts_decorate");
+function _ts_metadata21(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata22, "_ts_metadata");
+__name(_ts_metadata21, "_ts_metadata");
 var JoinSheetTabsService = class _JoinSheetTabsService {
   static {
     __name(this, "JoinSheetTabsService");
   }
   joinEngine;
-  logger = new import_common33.Logger(_JoinSheetTabsService.name);
+  logger = new import_common32.Logger(_JoinSheetTabsService.name);
   constructor(joinEngine) {
     this.joinEngine = joinEngine;
   }
@@ -5163,32 +5119,32 @@ var JoinSheetTabsService = class _JoinSheetTabsService {
     return orchestratedResults;
   }
 };
-JoinSheetTabsService = _ts_decorate31([
-  (0, import_common33.Injectable)(),
-  _ts_metadata22("design:type", Function),
-  _ts_metadata22("design:paramtypes", [
+JoinSheetTabsService = _ts_decorate30([
+  (0, import_common32.Injectable)(),
+  _ts_metadata21("design:type", Function),
+  _ts_metadata21("design:paramtypes", [
     typeof JoinEngine === "undefined" ? Object : JoinEngine
   ])
 ], JoinSheetTabsService);
 
 // src/core/repository/repository-core.facade.ts
-function _ts_decorate32(decorators, target, key, desc) {
+function _ts_decorate31(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate32, "_ts_decorate");
-function _ts_metadata23(k, v) {
+__name(_ts_decorate31, "_ts_decorate");
+function _ts_metadata22(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata23, "_ts_metadata");
-function _ts_param14(paramIndex, decorator) {
+__name(_ts_metadata22, "_ts_metadata");
+function _ts_param13(paramIndex, decorator) {
   return function(target, key) {
     decorator(target, key, paramIndex);
   };
 }
-__name(_ts_param14, "_ts_param");
+__name(_ts_param13, "_ts_param");
 var RepositoryCoreFacade = class {
   static {
     __name(this, "RepositoryCoreFacade");
@@ -5224,11 +5180,11 @@ var RepositoryCoreFacade = class {
     this.cacheManager = cacheManager;
   }
 };
-RepositoryCoreFacade = _ts_decorate32([
-  (0, import_common34.Injectable)(),
-  _ts_param14(13, (0, import_common34.Inject)(import_cache_manager2.CACHE_MANAGER)),
-  _ts_metadata23("design:type", Function),
-  _ts_metadata23("design:paramtypes", [
+RepositoryCoreFacade = _ts_decorate31([
+  (0, import_common33.Injectable)(),
+  _ts_param13(13, (0, import_common33.Inject)(import_cache_manager2.CACHE_MANAGER)),
+  _ts_metadata22("design:type", Function),
+  _ts_metadata22("design:paramtypes", [
     typeof MetadataRegistry === "undefined" ? Object : MetadataRegistry,
     typeof DataSourceManager === "undefined" ? Object : DataSourceManager,
     typeof UnitOfWork === "undefined" ? Object : UnitOfWork,
@@ -5247,17 +5203,17 @@ RepositoryCoreFacade = _ts_decorate32([
 ], RepositoryCoreFacade);
 
 // src/core/repository/sheets-repository.factory.ts
-function _ts_decorate33(decorators, target, key, desc) {
+function _ts_decorate32(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate33, "_ts_decorate");
-function _ts_metadata24(k, v) {
+__name(_ts_decorate32, "_ts_decorate");
+function _ts_metadata23(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata24, "_ts_metadata");
+__name(_ts_metadata23, "_ts_metadata");
 var SheetsRepositoryFactory = class {
   static {
     __name(this, "SheetsRepositoryFactory");
@@ -5275,32 +5231,32 @@ var SheetsRepositoryFactory = class {
     return new SheetsRepository(entityClass, coreFacade);
   }
 };
-SheetsRepositoryFactory = _ts_decorate33([
-  (0, import_common35.Injectable)(),
-  _ts_metadata24("design:type", Function),
-  _ts_metadata24("design:paramtypes", [
+SheetsRepositoryFactory = _ts_decorate32([
+  (0, import_common34.Injectable)(),
+  _ts_metadata23("design:type", Function),
+  _ts_metadata23("design:paramtypes", [
     typeof import_core2.ModuleRef === "undefined" ? Object : import_core2.ModuleRef
   ])
 ], SheetsRepositoryFactory);
 
 // src/core/cache/cache.module.ts
-var import_common36 = require("@nestjs/common");
+var import_common35 = require("@nestjs/common");
 var import_cache_manager3 = require("@nestjs/cache-manager");
-function _ts_decorate34(decorators, target, key, desc) {
+function _ts_decorate33(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate34, "_ts_decorate");
+__name(_ts_decorate33, "_ts_decorate");
 var SheetCacheModule = class {
   static {
     __name(this, "SheetCacheModule");
   }
 };
-SheetCacheModule = _ts_decorate34([
-  (0, import_common36.Global)(),
-  (0, import_common36.Module)({
+SheetCacheModule = _ts_decorate33([
+  (0, import_common35.Global)(),
+  (0, import_common35.Module)({
     imports: [
       import_cache_manager3.CacheModule.register({
         ttl: 6e4 * 5,
@@ -5314,15 +5270,15 @@ SheetCacheModule = _ts_decorate34([
 ], SheetCacheModule);
 
 // src/core/interceptors/sheet-odm-serialize.interceptor.ts
-var import_common37 = require("@nestjs/common");
+var import_common36 = require("@nestjs/common");
 var import_operators2 = require("rxjs/operators");
-function _ts_decorate35(decorators, target, key, desc) {
+function _ts_decorate34(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate35, "_ts_decorate");
+__name(_ts_decorate34, "_ts_decorate");
 var SheetOdmSerializeInterceptor = class {
   static {
     __name(this, "SheetOdmSerializeInterceptor");
@@ -5354,26 +5310,26 @@ var SheetOdmSerializeInterceptor = class {
     return data;
   }
 };
-SheetOdmSerializeInterceptor = _ts_decorate35([
-  (0, import_common37.Injectable)()
+SheetOdmSerializeInterceptor = _ts_decorate34([
+  (0, import_common36.Injectable)()
 ], SheetOdmSerializeInterceptor);
 
 // src/JoinSheetTabs/JoinSheetTabsModule.ts
-var import_common38 = require("@nestjs/common");
-function _ts_decorate36(decorators, target, key, desc) {
+var import_common37 = require("@nestjs/common");
+function _ts_decorate35(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate36, "_ts_decorate");
+__name(_ts_decorate35, "_ts_decorate");
 var JoinSheetTabsModule = class {
   static {
     __name(this, "JoinSheetTabsModule");
   }
 };
-JoinSheetTabsModule = _ts_decorate36([
-  (0, import_common38.Module)({
+JoinSheetTabsModule = _ts_decorate35([
+  (0, import_common37.Module)({
     providers: [
       JoinEngine,
       JoinSheetTabsService,
@@ -5389,17 +5345,17 @@ JoinSheetTabsModule = _ts_decorate36([
 ], JoinSheetTabsModule);
 
 // src/sheetOdm.module.ts
-function _ts_decorate37(decorators, target, key, desc) {
+function _ts_decorate36(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
   else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
   return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
-__name(_ts_decorate37, "_ts_decorate");
-function _ts_metadata25(k, v) {
+__name(_ts_decorate36, "_ts_decorate");
+function _ts_metadata24(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
-__name(_ts_metadata25, "_ts_metadata");
+__name(_ts_metadata24, "_ts_metadata");
 var CORE_SHARED_SERVICES = [
   RepositoryCoreFacade,
   DataSourceManager,
@@ -5417,7 +5373,6 @@ var CORE_SHARED_SERVICES = [
   AggregationFactory
 ];
 var INTERNAL_SERVICES = [
-  GoogleSheetProvider,
   GasQueryGateway,
   GoogleHealthService,
   SheetDataTransformer,
@@ -5493,7 +5448,7 @@ var SheetOdmModule = class _SheetOdmModule {
     __name(this, "SheetOdmModule");
   }
   provisioner;
-  logger = new import_common39.Logger("SheetOdm");
+  logger = new import_common38.Logger("SheetOdm");
   static hasBootstrapped = false;
   constructor(provisioner) {
     this.provisioner = provisioner;
@@ -5518,6 +5473,7 @@ var SheetOdmModule = class _SheetOdmModule {
     if (!options.useFactory) {
       throw new Error("El m\xE9todo [useFactory] es requerido en forRootAsync para SheetOdmModule.");
     }
+    const factory = options.useFactory;
     return {
       global: true,
       module: _SheetOdmModule,
@@ -5526,10 +5482,21 @@ var SheetOdmModule = class _SheetOdmModule {
         UowModule,
         JoinSheetTabsModule,
         ...options.imports || [],
-        OutboxModule.registerAsync({
-          useFactory: options.useFactory,
+        import_auth8.SpreadsheetAuthModule.registerAsync({
+          imports: options.imports,
           inject: options.inject,
-          imports: options.imports
+          useFactory: /* @__PURE__ */ __name(async (...args) => {
+            const config = await factory(...args);
+            return config.auth;
+          }, "useFactory")
+        }),
+        OutboxModule.registerAsync({
+          imports: options.imports,
+          inject: options.inject,
+          useFactory: /* @__PURE__ */ __name(async (...args) => {
+            const config = await factory(...args);
+            return config.odm;
+          }, "useFactory")
         })
       ],
       controllers: [
@@ -5538,19 +5505,25 @@ var SheetOdmModule = class _SheetOdmModule {
       providers: [
         {
           provide: "DATABASE_OPTIONS",
-          useFactory: options.useFactory,
+          useFactory: /* @__PURE__ */ __name(async (...args) => {
+            const config = await factory(...args);
+            return config.odm;
+          }, "useFactory"),
           inject: options.inject || []
         },
         {
-          provide: SHEET_ODM_OPTIONS,
-          useFactory: options.useFactory,
+          provide: import_auth8.SHEET_ODM_OPTIONS,
+          useFactory: /* @__PURE__ */ __name(async (...args) => {
+            const config = await factory(...args);
+            return config.odm;
+          }, "useFactory"),
           inject: options.inject || []
         },
         {
           provide: PostgresProvider,
           useFactory: /* @__PURE__ */ __name((opts) => new PostgresProvider(opts), "useFactory"),
           inject: [
-            SHEET_ODM_OPTIONS
+            import_auth8.SHEET_ODM_OPTIONS
           ]
         },
         {
@@ -5578,6 +5551,8 @@ var SheetOdmModule = class _SheetOdmModule {
       global: true,
       module: _SheetOdmModule,
       imports: [
+        import_auth8.SpreadsheetAuthModule.register(options.auth),
+        OutboxModule.register(options.odm),
         SheetCacheModule,
         UowModule,
         JoinSheetTabsModule
@@ -5588,17 +5563,17 @@ var SheetOdmModule = class _SheetOdmModule {
       providers: [
         {
           provide: "DATABASE_OPTIONS",
-          useValue: options
+          useValue: options.odm
         },
         {
-          provide: SHEET_ODM_OPTIONS,
-          useValue: options
+          provide: import_auth8.SHEET_ODM_OPTIONS,
+          useValue: options.odm
         },
         {
           provide: PostgresProvider,
           useFactory: /* @__PURE__ */ __name((opts) => new PostgresProvider(opts), "useFactory"),
           inject: [
-            SHEET_ODM_OPTIONS
+            import_auth8.SHEET_ODM_OPTIONS
           ]
         },
         {
@@ -5609,6 +5584,7 @@ var SheetOdmModule = class _SheetOdmModule {
       ],
       exports: [
         UowModule,
+        OutboxModule,
         PostgresProvider,
         POSTGRES_TOKEN,
         SheetCacheModule,
@@ -5654,15 +5630,15 @@ var SheetOdmModule = class _SheetOdmModule {
     };
   }
 };
-SheetOdmModule = _ts_decorate37([
-  (0, import_common39.Global)(),
-  (0, import_common39.Module)({
+SheetOdmModule = _ts_decorate36([
+  (0, import_common38.Global)(),
+  (0, import_common38.Module)({
     imports: [
       import_axios2.HttpModule
     ]
   }),
-  _ts_metadata25("design:type", Function),
-  _ts_metadata25("design:paramtypes", [
+  _ts_metadata24("design:type", Function),
+  _ts_metadata24("design:paramtypes", [
     typeof InfrastructureProvisioner === "undefined" ? Object : InfrastructureProvisioner
   ])
 ], SheetOdmModule);
@@ -5771,7 +5747,6 @@ __name(SubCollection, "SubCollection");
   CONNECTION_STABILITY,
   Column,
   DataSourceManager,
-  GoogleDriveConfig,
   HookType,
   IBaseProvider,
   IGoogleSheetProvider,
@@ -5803,7 +5778,6 @@ __name(SubCollection, "SubCollection");
   SHEETS_VIRTUALS,
   SHEETS_VIRTUAL_COLUMNS,
   SHEET_ODM_MODULE_OPTIONS,
-  SHEET_ODM_OPTIONS,
   SheetOdmModule,
   SheetOdmModuleOptions,
   SheetsRepository,

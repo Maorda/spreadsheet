@@ -4,7 +4,7 @@
     "moduleResolution": "node16",
     "resolvePackageJsonExports": true,
     "esModuleInterop": true,
-    "isolatedModules": true, // ◄── Mantenlo en true (Estándar moderno)
+    "isolatedModules": true,
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,
@@ -22,17 +22,23 @@
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
     "paths": {
-      "@spreadsheet/docs": [ // ◄── Corregido: Alineado con tu package.json
+      "@spreadsheet/auth": [
+        "libs/auth/src"
+      ],
+      "@spreadsheet/auth/*": [
+        "libs/auth/src/*"
+      ],
+      "@spreadsheet/docs": [
         "libs/docs/src"
       ],
-      "@spreadsheet/docs/*": [ // ◄── Corregido
+      "@spreadsheet/docs/*": [
         "libs/docs/src/*"
       ],
-      "@spreadsheet/odm/*": [ // ◄── Corregido
-        "libs/odm/src/*"
-      ],
-      "@spreadsheet/odm": [ // ◄── Corregido
+      "@spreadsheet/odm": [
         "libs/odm/src"
+      ],
+      "@spreadsheet/odm/*": [
+        "libs/odm/src/*"
       ]
     }
   },
