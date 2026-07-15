@@ -5467,6 +5467,7 @@ var SheetOdmModule = class _SheetOdmModule {
         POSTGRES_TOKEN,
         SheetCacheModule,
         JoinSheetTabsModule,
+        SpreadsheetAuthModule,
         ...CORE_SHARED_SERVICES
       ]
     };
@@ -5517,6 +5518,7 @@ var SheetOdmModule = class _SheetOdmModule {
         POSTGRES_TOKEN,
         SheetCacheModule,
         JoinSheetTabsModule,
+        SpreadsheetAuthModule,
         ...CORE_SHARED_SERVICES
       ]
     };

@@ -7,11 +7,11 @@ export default defineConfig({
     splitting: false,
     sourcemap: true,
     clean: true,
-    // CORRECCIÓN 2: Desactivamos minify para mantener legibles los stack traces en backend
     minify: false,
-    // CORRECCIÓN 3: Blindamos los externals para evitar que tsup intente empaquetar Nest o RxJS
     external: [
+        '@spreadsheet/auth', // <-- CRÍTICO: Evita empaquetar la librería hermana dentro de este bundle
         'googleapis',
+        'docx',
         '@nestjs/common',
         '@nestjs/core',
         'rxjs',

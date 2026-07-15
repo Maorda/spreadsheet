@@ -75,3 +75,4 @@ DocsModule = _ts_decorate2([
   DocsModule,
   DocsService
 });
+//# sourceMappingURL=index.js.map

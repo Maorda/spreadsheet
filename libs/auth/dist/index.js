@@ -1,2 +1,278 @@
-"use strict";var d=Object.defineProperty;var O=Object.getOwnPropertyDescriptor;var x=Object.getOwnPropertyNames;var j=Object.prototype.hasOwnProperty;var s=(t,e)=>d(t,"name",{value:e,configurable:!0});var P=(t,e)=>{for(var r in e)d(t,r,{get:e[r],enumerable:!0})},b=(t,e,r,c)=>{if(e&&typeof e=="object"||typeof e=="function")for(let o of x(e))!j.call(t,o)&&o!==r&&d(t,o,{get:()=>e[o],enumerable:!(c=O(e,o))||c.enumerable});return t};var A=t=>b(d({},"__esModule",{value:!0}),t);var E={};P(E,{AUTH_OPTIONS:()=>l,AuthModuleOptions:()=>u,GoogleClientProvider:()=>n,GoogleCredentials:()=>m,GoogleDriveConfig:()=>v,SHEET_ODM_OPTIONS:()=>T,SpreadsheetAuthModule:()=>h,SpreadsheetsAuthOptions:()=>w});module.exports=A(E);var g=require("@nestjs/common"),f=require("googleapis");var l="AUTH_OPTIONS",T="SHEET_ODM_OPTIONS";var m=class{static{s(this,"GoogleCredentials")}type;project_id;private_key_id;private_key;client_email;client_id;auth_uri;token_uri;auth_provider_x509_cert_url;client_x509_cert_url;universe_domain},u=class{static{s(this,"AuthModuleOptions")}googleDriveConfig},v=class{static{s(this,"GoogleDriveConfig")}client_email;private_key},w=class{static{s(this,"SpreadsheetsAuthOptions")}googleDriveConfig;googleDriveBaseFolderId;spreadsheetId;webAppUrl;apiKey;formatDates};function I(t,e,r,c){var o=arguments.length,i=o<3?e:c===null?c=Object.getOwnPropertyDescriptor(e,r):c,a;if(typeof Reflect=="object"&&typeof Reflect.decorate=="function")i=Reflect.decorate(t,e,r,c);else for(var p=t.length-1;p>=0;p--)(a=t[p])&&(i=(o<3?a(i):o>3?a(e,r,i):a(e,r))||i);return o>3&&i&&Object.defineProperty(e,r,i),i}s(I,"_ts_decorate");function y(t,e){if(typeof Reflect=="object"&&typeof Reflect.metadata=="function")return Reflect.metadata(t,e)}s(y,"_ts_metadata");function D(t,e){return function(r,c){e(r,c,t)}}s(D,"_ts_param");var n=class{static{s(this,"GoogleClientProvider")}config;_sheets;_drive;_script;docs;constructor(e){this.config=e,this.config||console.error("\u274C GoogleAuthProvider: 'CONFIG' es undefined en el constructor")}get script(){return this._script||this.initialize(),this._script}get sheets(){return this._sheets||this.initialize(),this._sheets}get drive(){return this._drive||this.initialize(),this._drive}initialize(){let e=this.config.googleDriveConfig;if(!e||!e.client_email)throw new Error("Configuraci\xF3n de Google no cargada en googleDriveConfig. Verifica tu .env o AppModule.");let r=new f.google.auth.GoogleAuth({credentials:{client_email:e.client_email,private_key:e.private_key},scopes:["https://www.googleapis.com/auth/drive","https://www.googleapis.com/auth/drive.file","https://www.googleapis.com/auth/drive.readonly","https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/spreadsheets.readonly","https://www.googleapis.com/auth/drive.metadata.readonly","https://www.googleapis.com/auth/script.external_request","https://www.googleapis.com/auth/documents","https://www.googleapis.com/auth/documents.readonly"]});this._drive=f.google.drive({version:"v3",auth:r}),this._sheets=f.google.sheets({version:"v4",auth:r}),this._script=f.google.script({version:"v1",auth:r}),this.docs=f.google.docs({version:"v1",auth:r})}};n=I([(0,g.Injectable)(),D(0,(0,g.Inject)(l)),y("design:type",Function),y("design:paramtypes",[typeof u>"u"?Object:u])],n);var _=require("@nestjs/common");function C(t,e,r,c){var o=arguments.length,i=o<3?e:c===null?c=Object.getOwnPropertyDescriptor(e,r):c,a;if(typeof Reflect=="object"&&typeof Reflect.decorate=="function")i=Reflect.decorate(t,e,r,c);else for(var p=t.length-1;p>=0;p--)(a=t[p])&&(i=(o<3?a(i):o>3?a(e,r,i):a(e,r))||i);return o>3&&i&&Object.defineProperty(e,r,i),i}s(C,"_ts_decorate");var h=class t{static{s(this,"SpreadsheetAuthModule")}static register(e){return{module:t,providers:[{provide:l,useValue:e},n],exports:[n]}}static registerAsync(e){return{module:t,imports:e.imports||[],providers:[...this.createAsyncProviders(e),n],exports:[n]}}static createAsyncProviders(e){if(e.useFactory)return[{provide:l,useFactory:e.useFactory,inject:e.inject||[]}];if(e.useClass)return[{provide:l,useFactory:s(async r=>await r.createAuthOptions(),"useFactory"),inject:[e.useClass]},e.useClass];if(e.useExisting)return[{provide:l,useFactory:s(async r=>await r.createAuthOptions(),"useFactory"),inject:[e.useExisting]}];throw new Error("Debes proporcionar useFactory, useClass o useExisting en registerAsync")}};h=C([(0,_.Global)(),(0,_.Module)({})],h);0&&(module.exports={AUTH_OPTIONS,AuthModuleOptions,GoogleClientProvider,GoogleCredentials,GoogleDriveConfig,SHEET_ODM_OPTIONS,SpreadsheetAuthModule,SpreadsheetsAuthOptions});
+"use strict";
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// src/index.ts
+var index_exports = {};
+__export(index_exports, {
+  AUTH_OPTIONS: () => AUTH_OPTIONS,
+  AuthModuleOptions: () => AuthModuleOptions,
+  GoogleClientProvider: () => GoogleClientProvider,
+  GoogleCredentials: () => GoogleCredentials,
+  GoogleDriveConfig: () => GoogleDriveConfig,
+  SHEET_ODM_OPTIONS: () => SHEET_ODM_OPTIONS,
+  SpreadsheetAuthModule: () => SpreadsheetAuthModule,
+  SpreadsheetsAuthOptions: () => SpreadsheetsAuthOptions
+});
+module.exports = __toCommonJS(index_exports);
+
+// src/google-client.provider.ts
+var import_common = require("@nestjs/common");
+var import_googleapis = require("googleapis");
+
+// src/auth.constants.ts
+var AUTH_OPTIONS = "AUTH_OPTIONS";
+var SHEET_ODM_OPTIONS = "SHEET_ODM_OPTIONS";
+
+// src/auth-options.interface.ts
+var GoogleCredentials = class {
+  static {
+    __name(this, "GoogleCredentials");
+  }
+  type;
+  project_id;
+  private_key_id;
+  private_key;
+  client_email;
+  client_id;
+  auth_uri;
+  token_uri;
+  auth_provider_x509_cert_url;
+  client_x509_cert_url;
+  universe_domain;
+};
+var AuthModuleOptions = class {
+  static {
+    __name(this, "AuthModuleOptions");
+  }
+  googleDriveConfig;
+};
+var GoogleDriveConfig = class {
+  static {
+    __name(this, "GoogleDriveConfig");
+  }
+  client_email;
+  private_key;
+};
+var SpreadsheetsAuthOptions = class {
+  static {
+    __name(this, "SpreadsheetsAuthOptions");
+  }
+  googleDriveConfig;
+  googleDriveBaseFolderId;
+  spreadsheetId;
+  webAppUrl;
+  apiKey;
+  formatDates;
+};
+
+// src/google-client.provider.ts
+function _ts_decorate(decorators, target, key, desc) {
+  var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+  if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+  else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+  return c > 3 && r && Object.defineProperty(target, key, r), r;
+}
+__name(_ts_decorate, "_ts_decorate");
+function _ts_metadata(k, v) {
+  if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+}
+__name(_ts_metadata, "_ts_metadata");
+function _ts_param(paramIndex, decorator) {
+  return function(target, key) {
+    decorator(target, key, paramIndex);
+  };
+}
+__name(_ts_param, "_ts_param");
+var GoogleClientProvider = class {
+  static {
+    __name(this, "GoogleClientProvider");
+  }
+  config;
+  _sheets;
+  _drive;
+  _script;
+  docs;
+  constructor(config) {
+    this.config = config;
+    if (!this.config) {
+      console.error("\u274C GoogleAuthProvider: 'CONFIG' es undefined en el constructor");
+    }
+  }
+  get script() {
+    if (!this._script) {
+      this.initialize();
+    }
+    return this._script;
+  }
+  // Usamos un Getter para inicialización bajo demanda (lazy-loading)
+  get sheets() {
+    if (!this._sheets) {
+      this.initialize();
+    }
+    return this._sheets;
+  }
+  get drive() {
+    if (!this._drive) {
+      this.initialize();
+    }
+    return this._drive;
+  }
+  initialize() {
+    const googleConfig = this.config.googleDriveConfig;
+    if (!googleConfig || !googleConfig.client_email) {
+      throw new Error("Configuraci\xF3n de Google no cargada en googleDriveConfig. Verifica tu .env o AppModule.");
+    }
+    const auth = new import_googleapis.google.auth.GoogleAuth({
+      credentials: {
+        client_email: googleConfig.client_email,
+        private_key: googleConfig.private_key
+      },
+      scopes: [
+        "https://www.googleapis.com/auth/drive",
+        "https://www.googleapis.com/auth/drive.file",
+        "https://www.googleapis.com/auth/drive.readonly",
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/spreadsheets.readonly",
+        "https://www.googleapis.com/auth/drive.metadata.readonly",
+        "https://www.googleapis.com/auth/script.external_request",
+        "https://www.googleapis.com/auth/documents",
+        "https://www.googleapis.com/auth/documents.readonly"
+      ]
+    });
+    this._drive = import_googleapis.google.drive({
+      version: "v3",
+      auth
+    });
+    this._sheets = import_googleapis.google.sheets({
+      version: "v4",
+      auth
+    });
+    this._script = import_googleapis.google.script({
+      version: "v1",
+      auth
+    });
+    this.docs = import_googleapis.google.docs({
+      version: "v1",
+      auth
+    });
+  }
+};
+GoogleClientProvider = _ts_decorate([
+  (0, import_common.Injectable)(),
+  _ts_param(0, (0, import_common.Inject)(AUTH_OPTIONS)),
+  _ts_metadata("design:type", Function),
+  _ts_metadata("design:paramtypes", [
+    typeof AuthModuleOptions === "undefined" ? Object : AuthModuleOptions
+  ])
+], GoogleClientProvider);
+
+// src/auth.module.ts
+var import_common2 = require("@nestjs/common");
+function _ts_decorate2(decorators, target, key, desc) {
+  var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+  if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+  else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+  return c > 3 && r && Object.defineProperty(target, key, r), r;
+}
+__name(_ts_decorate2, "_ts_decorate");
+var SpreadsheetAuthModule = class _SpreadsheetAuthModule {
+  static {
+    __name(this, "SpreadsheetAuthModule");
+  }
+  static register(options) {
+    return {
+      module: _SpreadsheetAuthModule,
+      providers: [
+        {
+          provide: AUTH_OPTIONS,
+          useValue: options
+        },
+        GoogleClientProvider
+      ],
+      exports: [
+        GoogleClientProvider
+      ]
+    };
+  }
+  static registerAsync(options) {
+    return {
+      module: _SpreadsheetAuthModule,
+      imports: options.imports || [],
+      providers: [
+        ...this.createAsyncProviders(options),
+        GoogleClientProvider
+      ],
+      exports: [
+        GoogleClientProvider
+      ]
+    };
+  }
+  static createAsyncProviders(options) {
+    if (options.useFactory) {
+      return [
+        {
+          provide: AUTH_OPTIONS,
+          useFactory: options.useFactory,
+          inject: options.inject || []
+        }
+      ];
+    }
+    if (options.useClass) {
+      return [
+        {
+          provide: AUTH_OPTIONS,
+          useFactory: /* @__PURE__ */ __name(async (optionsFactory) => await optionsFactory.createAuthOptions(), "useFactory"),
+          inject: [
+            options.useClass
+          ]
+        },
+        options.useClass
+      ];
+    }
+    if (options.useExisting) {
+      return [
+        {
+          provide: AUTH_OPTIONS,
+          useFactory: /* @__PURE__ */ __name(async (optionsFactory) => await optionsFactory.createAuthOptions(), "useFactory"),
+          inject: [
+            options.useExisting
+          ]
+        }
+      ];
+    }
+    throw new Error("Debes proporcionar useFactory, useClass o useExisting en registerAsync");
+  }
+};
+SpreadsheetAuthModule = _ts_decorate2([
+  (0, import_common2.Global)(),
+  (0, import_common2.Module)({})
+], SpreadsheetAuthModule);
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  AUTH_OPTIONS,
+  AuthModuleOptions,
+  GoogleClientProvider,
+  GoogleCredentials,
+  GoogleDriveConfig,
+  SHEET_ODM_OPTIONS,
+  SpreadsheetAuthModule,
+  SpreadsheetsAuthOptions
+});
 //# sourceMappingURL=index.js.map

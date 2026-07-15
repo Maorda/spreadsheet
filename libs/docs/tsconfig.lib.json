@@ -3,7 +3,6 @@
   "compilerOptions": {
     "declaration": true,
     "declarationMap": true,
-    // Corregimos: Usar "Bundler" es el estándar moderno para librerías con tsup
     "moduleResolution": "Bundler",
     "target": "ES2022",
     "module": "ESNext",
@@ -13,10 +12,15 @@
     "experimentalDecorators": true,
     "skipLibCheck": true,
     "strict": true,
-    // Corregimos: Deshabilitamos incremental para que no choque con la generación de dts
     "incremental": false
   },
   "include": [
     "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.spec.ts",
+    "**/*.test.ts"
   ]
 }

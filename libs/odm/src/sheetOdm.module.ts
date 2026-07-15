@@ -1,7 +1,7 @@
-import { Module, DynamicModule, Global, Provider, OnApplicationBootstrap, Logger, ModuleMetadata, Type } from '@nestjs/common';
+import { Module, DynamicModule, Global, Provider, OnApplicationBootstrap, Logger } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { APP_INTERCEPTOR } from '@nestjs/core';
-import { GoogleClientProvider, SHEET_ODM_OPTIONS, AuthModuleOptions, SpreadsheetAuthModule } from '@spreadsheet/auth';
+import { SHEET_ODM_OPTIONS, SpreadsheetAuthModule } from '@spreadsheet/auth';
 
 // Interfaces, Constantes y Tokens
 import {
@@ -224,6 +224,7 @@ export class SheetOdmModule implements OnApplicationBootstrap {
         POSTGRES_TOKEN,
         SheetCacheModule,
         JoinSheetTabsModule,
+        SpreadsheetAuthModule,
         ...CORE_SHARED_SERVICES,
       ],
     };
@@ -263,6 +264,7 @@ export class SheetOdmModule implements OnApplicationBootstrap {
         POSTGRES_TOKEN,
         SheetCacheModule,
         JoinSheetTabsModule,
+        SpreadsheetAuthModule,
         ...CORE_SHARED_SERVICES,
       ],
     };

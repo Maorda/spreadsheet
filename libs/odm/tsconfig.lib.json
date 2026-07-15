@@ -1,11 +1,14 @@
 {
-  "extends": "../../tsconfig.json", // ◄── Hereda las reglas globales del monorepo
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "./dist",
     "declaration": true,
+    "declarationMap": true, // ◄── Habilitado: Salta directamente al código fuente en TS
     "target": "ES2022",
-    "isolatedModules": true, // ◄── Requerido por tsup para compilar rápido y limpio
-    "incremental": false
+    "isolatedModules": true,
+    "incremental": false,
+    "experimentalDecorators": true, // ◄── VITAL: Permite el uso de decoradores en tus Entidades
+    "emitDecoratorMetadata": true // ◄── VITAL: El ODM necesita saber si tu propiedad es un String, Date o Number
   },
   "include": [
     "src/**/*",
@@ -13,6 +16,8 @@
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "**/*.spec.ts", // ◄── Excluimos archivos de tests de la distribución final
+    "**/*.test.ts"
   ]
 }

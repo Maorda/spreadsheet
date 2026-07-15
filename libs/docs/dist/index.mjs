@@ -49,3 +49,4 @@ export {
   DocsModule,
   DocsService
 };
+//# sourceMappingURL=index.mjs.map
