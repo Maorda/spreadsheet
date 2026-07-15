@@ -1,9 +1,24 @@
-import { Body, Controller, Get, Injectable, Logger, NotFoundException, Post } from '@nestjs/common';
-import { AppService } from './app.service';
+import { Body, Controller, Get, HttpException, HttpStatus, Injectable, Logger, NotFoundException, Post, Res } from '@nestjs/common';
+import { AppService, CartasService } from './app.service';
 import { Table, Column, SubCollection, PrimaryKey, InjectModel } from "@spreadsheet/odm";
 import { IsString, IsNotEmpty, IsNumber, IsOptional, Min, IsDateString } from "class-validator";
 import type { FilterQuery, QueryOptions } from '@spreadsheet/odm';
 import type { Model } from '@spreadsheet/odm/core/model';
+import { DriveDocsService } from '@spreadsheet/docs';
+import * as express from 'express';
+
+export class GenerarCartaDto {
+  fecha: string;
+  destinatarioNombre: string;
+  destinatarioCargo: string;
+  destinatarioEmpresa: string;
+  asunto: string;
+  cuerpo: string[]; // Un array donde cada elemento es un párrafo
+  remitenteNombre: string;
+  remitenteCargo: string;
+  remitenteContacto?: string;
+  carpetaId: string; // Carpeta de Drive donde se procesará temporalmente
+}
 
 export class CreateAdelantoDto {
   @IsString()
@@ -270,7 +285,39 @@ export class PlanillaTareoService {
     return await this.adelantoModel.find(filtro);
   }
 }
+@Controller('documentos')
+export class CartasController {
+  constructor(private readonly cartasService: CartasService) { }
 
+  @Post('carta-presentacion')
+  async descargarCartaPresentacion(
+    @Body() dto: GenerarCartaDto,
+    @Res() res: express.Response
+  ) {
+    try {
+      const pdfBuffer = await this.cartasService.generarCartaPresentacionPdf(dto);
+
+      // Configuramos las cabeceras HTTP para forzar la descarga del PDF
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="Carta_Presentacion_${dto.remitenteNombre.replace(/\s+/g, '_')}.pdf"`
+      );
+      res.setHeader('Content-Length', pdfBuffer.length.toString());
+
+      res.end(pdfBuffer);
+    } catch (error) {
+      throw new HttpException(
+        {
+          status: HttpStatus.INTERNAL_SERVER_ERROR,
+          error: 'Ocurrió un error al generar la carta de presentación en PDF.',
+          details: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+}
 @Controller('admin-planilla')
 export class PlanillaAdminController {
   constructor(private readonly adelantoService: PlanillaTareoService) { }

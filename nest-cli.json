@@ -22,7 +22,14 @@
       "entryFile": "index",
       "sourceRoot": "libs/docs/src",
       "compilerOptions": {
-        "tsConfigPath": "libs/docs/tsconfig.lib.json"
+        "tsConfigPath": "libs/docs/tsconfig.lib.json",
+        "assets": [
+          {
+            "include": "assets/**/*",
+            "outDir": "dist/libs/docs/src",
+            "watchAssets": true
+          }
+        ]
       }
     },
     "odm": {

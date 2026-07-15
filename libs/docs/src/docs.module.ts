@@ -1,8 +1,12 @@
 import { Module } from '@nestjs/common';
-import { DocsService } from './docs.service';
+import { DriveDocsService } from './drive-docs.service';
+import { CompiladorController } from './compilador.controller';
+import { DocumentCompilerService } from './document-compiler.service';
 
 @Module({
-  providers: [DocsService],
-  exports: [DocsService],
+  controllers: [CompiladorController],
+  providers: [DriveDocsService, DocumentCompilerService],
+  exports: [DriveDocsService, DocumentCompilerService],
+
 })
-export class DocsModule {}
+export class DocsModule { }

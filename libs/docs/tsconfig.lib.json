@@ -12,7 +12,12 @@
     "experimentalDecorators": true,
     "skipLibCheck": true,
     "strict": true,
-    "incremental": false
+    "incremental": false,
+    "paths": {
+      "@spreadsheet/auth": [
+        "../auth/dist"
+      ]
+    }
   },
   "include": [
     "src/**/*"

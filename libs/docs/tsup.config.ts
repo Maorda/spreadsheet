@@ -9,9 +9,8 @@ export default defineConfig({
     clean: true,
     minify: false,
     external: [
-        '@spreadsheet/auth', // <-- CRÍTICO: Evita empaquetar la librería hermana dentro de este bundle
+        '@spreadsheet/auth', // Evitamos empaquetar la librería de autenticación aquí
         'googleapis',
-        'docx',
         '@nestjs/common',
         '@nestjs/core',
         'rxjs',
