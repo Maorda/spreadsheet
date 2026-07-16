@@ -9,12 +9,15 @@ export default defineConfig({
     clean: true,
     minify: false,
     external: [
-        '@spreadsheet/auth', // Evitamos empaquetar la librería de autenticación aquí
+        '@spreadsheet/auth',
         'googleapis',
         '@nestjs/common',
         '@nestjs/core',
         'rxjs',
-        'reflect-metadata'
+        'reflect-metadata',
+        'docx',
+        'class-validator',
+        'class-transformer'
     ],
     tsconfig: './tsconfig.lib.json',
 });

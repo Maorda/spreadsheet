@@ -131,7 +131,7 @@ import { Controller, Post, Body, Res, HttpStatus, HttpException } from "@nestjs/
 
 // src/document-compiler.service.ts
 import { Injectable as Injectable2, Logger as Logger2 } from "@nestjs/common";
-import { Paragraph, TextRun, ImageRun, AlignmentType, HeadingLevel } from "docx";
+import { Paragraph, TextRun, ImageRun, AlignmentType, HeadingLevel, TableOfContents, Header, Footer, PageNumber } from "docx";
 import * as fs from "fs";
 import * as path from "path";
 import axios from "axios";
@@ -155,75 +155,135 @@ var DocumentCompilerService = class _DocumentCompilerService {
   constructor(driveDocsService) {
     this.driveDocsService = driveDocsService;
   }
-  async obtenerBufferImagen(imgId, source) {
-    if (source === "web") {
-      try {
+  async obtenerBufferImagen(imgId, source = "drive") {
+    if (!imgId) return null;
+    try {
+      if (source === "web") {
         const response = await axios.get(imgId, {
           responseType: "arraybuffer"
         });
         return Buffer.from(response.data, "binary");
-      } catch (error) {
-        return null;
       }
+      if (source === "drive") {
+        return await this.driveDocsService.obtenerArchivoComoBuffer(imgId);
+      }
+      return this.cargarImagenLocal(imgId);
+    } catch (error) {
+      this.logger.error(`\u274C Error obteniendo imagen [${imgId}] desde [${source}]: ${error.message}`);
+      return null;
     }
-    if (source === "drive") {
-      return await this.driveDocsService.obtenerArchivoComoBuffer(imgId);
-    }
-    return this.cargarImagenLocal(imgId);
   }
-  /**
-   * Traduce el JSON dinámico recibido por el body a la estructura nativa ISectionOptions de docx
-   */
-  compilarJSON(bloques) {
-    const paragraphChildren = bloques.map((bloque) => {
-      const runs = [];
-      for (const item of bloque.data) {
-        if (item.img) {
-          const bufferImagen = this.cargarImagenLocal(item.img);
-          if (bufferImagen) {
-            const extension = item.img.split(".").pop()?.toLowerCase() || "png";
-            const imageType = extension === "jpeg" ? "jpg" : extension;
-            runs.push(new ImageRun({
-              data: bufferImagen,
-              // Indicamos explícitamente el tipo para satisfacer la interfaz SvgMediaOptions & CoreImageOptions
-              type: imageType,
-              transformation: {
-                width: item.transformation?.width ?? 50,
-                height: item.transformation?.height ?? 50
-              }
-            }));
-          }
-          if (item.break) {
-            runs.push(new TextRun({
-              text: "",
-              break: item.break
-            }));
-          }
-        } else {
+  async buildParagraph(data, config) {
+    const runs = [];
+    const itemsSeguros = Array.isArray(data) ? data : [];
+    for (const item of itemsSeguros) {
+      if (!item) continue;
+      if (item.isPageNumber) {
+        runs.push(new TextRun({
+          children: [
+            PageNumber.CURRENT
+          ],
+          font: item.font || "Arial",
+          size: item.size || 22,
+          bold: item.style === "strong"
+        }));
+      } else if (item.isTotalPages) {
+        runs.push(new TextRun({
+          children: [
+            PageNumber.TOTAL_PAGES
+          ],
+          font: item.font || "Arial",
+          size: item.size || 22,
+          bold: item.style === "strong"
+        }));
+      } else if (item.img) {
+        const source = item.imgSource || "drive";
+        const bufferImagen = await this.obtenerBufferImagen(item.img, source);
+        if (bufferImagen) {
+          const tipoImagen = this.obtenerTipoImagen(bufferImagen);
+          runs.push(new ImageRun({
+            data: bufferImagen,
+            transformation: {
+              width: item.transformation?.width ?? 100,
+              height: item.transformation?.height ?? 100
+            },
+            type: tipoImagen
+          }));
+        }
+      } else {
+        if (item.break) {
           runs.push(new TextRun({
-            text: item.text,
+            text: "",
+            break: item.break
+          }));
+        }
+        if (item.text || item.text === "") {
+          runs.push(new TextRun({
+            text: item.text || "",
             bold: item.style === "strong",
-            break: item.break,
-            font: "Arial",
-            size: 22
+            font: item.font || "Arial",
+            size: item.size || 22
           }));
         }
       }
-      return new Paragraph({
-        children: runs,
-        alignment: this.mapAlignment(bloque.config?.alignment),
-        heading: this.mapHeading(bloque.config?.heading),
-        indent: bloque.config?.indent ? {
-          left: bloque.config.indent.left
-        } : void 0,
-        spacing: bloque.config?.spacing ? {
-          line: bloque.config.spacing.line,
-          after: bloque.config.spacing.after
-        } : void 0
-      });
+    }
+    const alignment = this.mapAlignment(config?.alignment);
+    const heading = config && "heading" in config ? this.mapHeading(config.heading) : void 0;
+    const indent = config && "indent" in config && config.indent ? {
+      left: config.indent?.left
+    } : void 0;
+    const spacing = config && "spacing" in config ? config.spacing : void 0;
+    return new Paragraph({
+      children: runs,
+      alignment,
+      heading,
+      indent,
+      spacing
     });
+  }
+  async compilarJSON(dto) {
+    const bloquesSeguros = Array.isArray(dto?.bloques) ? dto.bloques : [];
+    const paragraphChildren = await Promise.all(bloquesSeguros.map(async (bloque) => {
+      if (!bloque) return new Paragraph({});
+      if (bloque.type === "toc") {
+        const titulo = bloque.config?.title || "\xCDndice";
+        return new TableOfContents(titulo, {
+          hyperlink: true,
+          headingStyleRange: "1-3"
+        });
+      }
+      return this.buildParagraph(bloque.data || [], bloque.config);
+    }));
+    let headers = void 0;
+    if (dto?.header && Array.isArray(dto.header.data)) {
+      const headerParagraph = await this.buildParagraph(dto.header.data, {
+        alignment: dto.header.alignment
+      });
+      headers = {
+        default: new Header({
+          children: [
+            headerParagraph
+          ]
+        })
+      };
+    }
+    let footers = void 0;
+    if (dto?.footer && Array.isArray(dto.footer.data)) {
+      const footerParagraph = await this.buildParagraph(dto.footer.data, {
+        alignment: dto.footer.alignment
+      });
+      footers = {
+        default: new Footer({
+          children: [
+            footerParagraph
+          ]
+        })
+      };
+    }
     return {
-      children: paragraphChildren
+      children: paragraphChildren,
+      headers,
+      footers
     };
   }
   /**
@@ -232,9 +292,13 @@ var DocumentCompilerService = class _DocumentCompilerService {
   cargarImagenLocal(nombreImagen) {
     try {
       const ruta = path.join(process.cwd(), "assets", nombreImagen);
+      if (!fs.existsSync(ruta)) {
+        this.logger.warn(`\u26A0\uFE0F Imagen local no encontrada en la ruta: ${ruta}`);
+        return null;
+      }
       return fs.readFileSync(ruta);
     } catch (error) {
-      this.logger.warn(`No se pudo cargar la imagen: ${nombreImagen}. Error: ${error.message}`);
+      this.logger.warn(`\u274C No se pudo cargar la imagen: ${nombreImagen}. Error: ${error.message}`);
       return null;
     }
   }
@@ -268,6 +332,22 @@ var DocumentCompilerService = class _DocumentCompilerService {
         return void 0;
     }
   }
+  obtenerTipoImagen(buffer) {
+    if (!buffer || buffer.length < 4) return "png";
+    if (buffer[0] === 137 && buffer[1] === 80 && buffer[2] === 78 && buffer[3] === 71) {
+      return "png";
+    }
+    if (buffer[0] === 255 && buffer[1] === 216 && buffer[2] === 255) {
+      return "jpg";
+    }
+    if (buffer[0] === 71 && buffer[1] === 73 && buffer[2] === 70) {
+      return "gif";
+    }
+    if (buffer[0] === 66 && buffer[1] === 77) {
+      return "bmp";
+    }
+    return "png";
+  }
 };
 DocumentCompilerService = _ts_decorate2([
   Injectable2(),
@@ -277,812 +357,9 @@ DocumentCompilerService = _ts_decorate2([
   ])
 ], DocumentCompilerService);
 
-// ../../node_modules/class-validator/esm5/metadata/ValidationMetadata.js
-var ValidationMetadata = (
-  /** @class */
-  /* @__PURE__ */ (function() {
-    function ValidationMetadata2(args) {
-      this.groups = [];
-      this.each = false;
-      this.context = void 0;
-      this.type = args.type;
-      this.name = args.name;
-      this.target = args.target;
-      this.propertyName = args.propertyName;
-      this.constraints = args === null || args === void 0 ? void 0 : args.constraints;
-      this.constraintCls = args.constraintCls;
-      this.validationTypeOptions = args.validationTypeOptions;
-      if (args.validationOptions) {
-        this.message = args.validationOptions.message;
-        this.groups = args.validationOptions.groups;
-        this.always = args.validationOptions.always;
-        this.each = args.validationOptions.each;
-        this.context = args.validationOptions.context;
-        this.validateIf = args.validationOptions.validateIf;
-      }
-    }
-    __name(ValidationMetadata2, "ValidationMetadata");
-    return ValidationMetadata2;
-  })()
-);
-
-// ../../node_modules/class-validator/esm5/validation-schema/ValidationSchemaToMetadataTransformer.js
-var ValidationSchemaToMetadataTransformer = (
-  /** @class */
-  (function() {
-    function ValidationSchemaToMetadataTransformer2() {
-    }
-    __name(ValidationSchemaToMetadataTransformer2, "ValidationSchemaToMetadataTransformer");
-    ValidationSchemaToMetadataTransformer2.prototype.transform = function(schema) {
-      var metadatas = [];
-      Object.keys(schema.properties).forEach(function(property) {
-        schema.properties[property].forEach(function(validation) {
-          var validationOptions = {
-            message: validation.message,
-            groups: validation.groups,
-            always: validation.always,
-            each: validation.each
-          };
-          var args = {
-            type: validation.type,
-            name: validation.name,
-            target: schema.name,
-            propertyName: property,
-            constraints: validation.constraints,
-            validationTypeOptions: validation.options,
-            validationOptions
-          };
-          metadatas.push(new ValidationMetadata(args));
-        });
-      });
-      return metadatas;
-    };
-    return ValidationSchemaToMetadataTransformer2;
-  })()
-);
-
-// ../../node_modules/class-validator/esm5/utils/get-global.util.js
-function getGlobal() {
-  if (typeof globalThis !== "undefined") {
-    return globalThis;
-  }
-  if (typeof global !== "undefined") {
-    return global;
-  }
-  if (typeof window !== "undefined") {
-    return window;
-  }
-  if (typeof self !== "undefined") {
-    return self;
-  }
-}
-__name(getGlobal, "getGlobal");
-
-// ../../node_modules/class-validator/esm5/metadata/MetadataStorage.js
-var __values = function(o) {
-  var s = typeof Symbol === "function" && Symbol.iterator, m = s && o[s], i = 0;
-  if (m) return m.call(o);
-  if (o && typeof o.length === "number") return {
-    next: /* @__PURE__ */ __name(function() {
-      if (o && i >= o.length) o = void 0;
-      return {
-        value: o && o[i++],
-        done: !o
-      };
-    }, "next")
-  };
-  throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
-};
-var __read = function(o, n) {
-  var m = typeof Symbol === "function" && o[Symbol.iterator];
-  if (!m) return o;
-  var i = m.call(o), r, ar = [], e;
-  try {
-    while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
-  } catch (error) {
-    e = {
-      error
-    };
-  } finally {
-    try {
-      if (r && !r.done && (m = i["return"])) m.call(i);
-    } finally {
-      if (e) throw e.error;
-    }
-  }
-  return ar;
-};
-var __spreadArray = function(to, from, pack) {
-  if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-    if (ar || !(i in from)) {
-      if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-      ar[i] = from[i];
-    }
-  }
-  return to.concat(ar || Array.prototype.slice.call(from));
-};
-var MetadataStorage = (
-  /** @class */
-  (function() {
-    function MetadataStorage3() {
-      this.validationMetadatas = /* @__PURE__ */ new Map();
-      this.constraintMetadatas = /* @__PURE__ */ new Map();
-    }
-    __name(MetadataStorage3, "MetadataStorage");
-    Object.defineProperty(MetadataStorage3.prototype, "hasValidationMetaData", {
-      get: /* @__PURE__ */ __name(function() {
-        return !!this.validationMetadatas.size;
-      }, "get"),
-      enumerable: false,
-      configurable: true
-    });
-    MetadataStorage3.prototype.addValidationSchema = function(schema) {
-      var _this = this;
-      var validationMetadatas = new ValidationSchemaToMetadataTransformer().transform(schema);
-      validationMetadatas.forEach(function(validationMetadata) {
-        return _this.addValidationMetadata(validationMetadata);
-      });
-    };
-    MetadataStorage3.prototype.addValidationMetadata = function(metadata) {
-      var existingMetadata = this.validationMetadatas.get(metadata.target);
-      if (existingMetadata) {
-        existingMetadata.push(metadata);
-      } else {
-        this.validationMetadatas.set(metadata.target, [
-          metadata
-        ]);
-      }
-    };
-    MetadataStorage3.prototype.addConstraintMetadata = function(metadata) {
-      var existingMetadata = this.constraintMetadatas.get(metadata.target);
-      if (existingMetadata) {
-        existingMetadata.push(metadata);
-      } else {
-        this.constraintMetadatas.set(metadata.target, [
-          metadata
-        ]);
-      }
-    };
-    MetadataStorage3.prototype.groupByPropertyName = function(metadata) {
-      var grouped = {};
-      metadata.forEach(function(metadata2) {
-        if (!grouped[metadata2.propertyName]) grouped[metadata2.propertyName] = [];
-        grouped[metadata2.propertyName].push(metadata2);
-      });
-      return grouped;
-    };
-    MetadataStorage3.prototype.getTargetValidationMetadatas = function(targetConstructor, targetSchema, always, strictGroups, groups) {
-      var e_1, _a;
-      var includeMetadataBecauseOfAlwaysOption = /* @__PURE__ */ __name(function(metadata) {
-        if (typeof metadata.always !== "undefined") return metadata.always;
-        if (metadata.groups && metadata.groups.length) return false;
-        return always;
-      }, "includeMetadataBecauseOfAlwaysOption");
-      var excludeMetadataBecauseOfStrictGroupsOption = /* @__PURE__ */ __name(function(metadata) {
-        if (strictGroups) {
-          if (!groups || !groups.length) {
-            if (metadata.groups && metadata.groups.length) return true;
-          }
-        }
-        return false;
-      }, "excludeMetadataBecauseOfStrictGroupsOption");
-      var filteredForOriginalMetadatasSearch = this.validationMetadatas.get(targetConstructor) || [];
-      var originalMetadatas = filteredForOriginalMetadatasSearch.filter(function(metadata) {
-        if (metadata.target !== targetConstructor && metadata.target !== targetSchema) return false;
-        if (includeMetadataBecauseOfAlwaysOption(metadata)) return true;
-        if (excludeMetadataBecauseOfStrictGroupsOption(metadata)) return false;
-        if (groups && groups.length > 0) return metadata.groups && !!metadata.groups.find(function(group) {
-          return groups.indexOf(group) !== -1;
-        });
-        return true;
-      });
-      var filteredForInheritedMetadatasSearch = [];
-      try {
-        for (var _b = __values(this.validationMetadatas.entries()), _c = _b.next(); !_c.done; _c = _b.next()) {
-          var _d = __read(_c.value, 2), key = _d[0], value = _d[1];
-          if (targetConstructor.prototype instanceof key) {
-            filteredForInheritedMetadatasSearch.push.apply(filteredForInheritedMetadatasSearch, __spreadArray([], __read(value), false));
-          }
-        }
-      } catch (e_1_1) {
-        e_1 = {
-          error: e_1_1
-        };
-      } finally {
-        try {
-          if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
-        } finally {
-          if (e_1) throw e_1.error;
-        }
-      }
-      var inheritedMetadatas = filteredForInheritedMetadatasSearch.filter(function(metadata) {
-        if (typeof metadata.target === "string") return false;
-        if (metadata.target === targetConstructor) return false;
-        if (metadata.target instanceof Function && !(targetConstructor.prototype instanceof metadata.target)) return false;
-        if (includeMetadataBecauseOfAlwaysOption(metadata)) return true;
-        if (excludeMetadataBecauseOfStrictGroupsOption(metadata)) return false;
-        if (groups && groups.length > 0) return metadata.groups && !!metadata.groups.find(function(group) {
-          return groups.indexOf(group) !== -1;
-        });
-        return true;
-      });
-      var uniqueInheritedMetadatas = inheritedMetadatas.filter(function(inheritedMetadata) {
-        return !originalMetadatas.find(function(originalMetadata) {
-          return originalMetadata.propertyName === inheritedMetadata.propertyName && originalMetadata.type === inheritedMetadata.type;
-        });
-      });
-      return originalMetadatas.concat(uniqueInheritedMetadatas);
-    };
-    MetadataStorage3.prototype.getTargetValidatorConstraints = function(target) {
-      return this.constraintMetadatas.get(target) || [];
-    };
-    return MetadataStorage3;
-  })()
-);
-function getMetadataStorage() {
-  var global2 = getGlobal();
-  if (!global2.classValidatorMetadataStorage) {
-    global2.classValidatorMetadataStorage = new MetadataStorage();
-  }
-  return global2.classValidatorMetadataStorage;
-}
-__name(getMetadataStorage, "getMetadataStorage");
-
-// ../../node_modules/class-validator/esm5/validation/ValidationTypes.js
-var ValidationTypes = (
-  /** @class */
-  (function() {
-    function ValidationTypes2() {
-    }
-    __name(ValidationTypes2, "ValidationTypes");
-    ValidationTypes2.isValid = function(type) {
-      var _this = this;
-      return type !== "isValid" && type !== "getMessage" && Object.keys(this).map(function(key) {
-        return _this[key];
-      }).indexOf(type) !== -1;
-    };
-    ValidationTypes2.CUSTOM_VALIDATION = "customValidation";
-    ValidationTypes2.NESTED_VALIDATION = "nestedValidation";
-    ValidationTypes2.PROMISE_VALIDATION = "promiseValidation";
-    ValidationTypes2.CONDITIONAL_VALIDATION = "conditionalValidation";
-    ValidationTypes2.WHITELIST = "whitelistValidation";
-    ValidationTypes2.IS_DEFINED = "isDefined";
-    return ValidationTypes2;
-  })()
-);
-
-// ../../node_modules/class-validator/esm5/container.js
-var defaultContainer = new /** @class */
-((function() {
-  function class_1() {
-    this.instances = [];
-  }
-  __name(class_1, "class_1");
-  class_1.prototype.get = function(someClass) {
-    var instance = this.instances.find(function(instance2) {
-      return instance2.type === someClass;
-    });
-    if (!instance) {
-      instance = {
-        type: someClass,
-        object: new someClass()
-      };
-      this.instances.push(instance);
-    }
-    return instance.object;
-  };
-  return class_1;
-})())();
-var userContainer;
-var userContainerOptions;
-function getFromContainer(someClass) {
-  if (userContainer) {
-    try {
-      var instance = userContainer.get(someClass);
-      if (instance) return instance;
-      if (!userContainerOptions || !userContainerOptions.fallback) return instance;
-    } catch (error) {
-      if (!userContainerOptions || !userContainerOptions.fallbackOnErrors) throw error;
-    }
-  }
-  return defaultContainer.get(someClass);
-}
-__name(getFromContainer, "getFromContainer");
-
-// ../../node_modules/class-validator/esm5/metadata/ConstraintMetadata.js
-var ConstraintMetadata = (
-  /** @class */
-  (function() {
-    function ConstraintMetadata2(target, name, async) {
-      if (async === void 0) {
-        async = false;
-      }
-      this.target = target;
-      this.name = name;
-      this.async = async;
-    }
-    __name(ConstraintMetadata2, "ConstraintMetadata");
-    Object.defineProperty(ConstraintMetadata2.prototype, "instance", {
-      // -------------------------------------------------------------------------
-      // Accessors
-      // -------------------------------------------------------------------------
-      /**
-       * Instance of the target custom validation class which performs validation.
-       */
-      get: /* @__PURE__ */ __name(function() {
-        return getFromContainer(this.target);
-      }, "get"),
-      enumerable: false,
-      configurable: true
-    });
-    return ConstraintMetadata2;
-  })()
-);
-
-// ../../node_modules/class-validator/esm5/register-decorator.js
-function registerDecorator(options) {
-  var constraintCls;
-  if (options.validator instanceof Function) {
-    constraintCls = options.validator;
-    var constraintClasses = getFromContainer(MetadataStorage).getTargetValidatorConstraints(options.validator);
-    if (constraintClasses.length > 1) {
-      throw "More than one implementation of ValidatorConstraintInterface found for validator on: ".concat(options.target.name, ":").concat(options.propertyName);
-    }
-  } else {
-    var validator_1 = options.validator;
-    constraintCls = /** @class */
-    (function() {
-      function CustomConstraint() {
-      }
-      __name(CustomConstraint, "CustomConstraint");
-      CustomConstraint.prototype.validate = function(value, validationArguments) {
-        return validator_1.validate(value, validationArguments);
-      };
-      CustomConstraint.prototype.defaultMessage = function(validationArguments) {
-        if (validator_1.defaultMessage) {
-          return validator_1.defaultMessage(validationArguments);
-        }
-        return "";
-      };
-      return CustomConstraint;
-    })();
-    getMetadataStorage().addConstraintMetadata(new ConstraintMetadata(constraintCls, options.name, options.async));
-  }
-  var validationMetadataArgs = {
-    type: options.name && ValidationTypes.isValid(options.name) ? options.name : ValidationTypes.CUSTOM_VALIDATION,
-    name: options.name,
-    target: options.target,
-    propertyName: options.propertyName,
-    validationOptions: options.options,
-    constraintCls,
-    constraints: options.constraints
-  };
-  getMetadataStorage().addValidationMetadata(new ValidationMetadata(validationMetadataArgs));
-}
-__name(registerDecorator, "registerDecorator");
-
-// ../../node_modules/class-validator/esm5/decorator/common/ValidateBy.js
-function buildMessage(impl, validationOptions) {
-  return function(validationArguments) {
-    var eachPrefix = validationOptions && validationOptions.each ? "each value in " : "";
-    return impl(eachPrefix, validationArguments);
-  };
-}
-__name(buildMessage, "buildMessage");
-function ValidateBy(options, validationOptions) {
-  return function(object, propertyName) {
-    registerDecorator({
-      name: options.name,
-      target: object.constructor,
-      propertyName,
-      options: validationOptions,
-      constraints: options.constraints,
-      validator: options.validator
-    });
-  };
-}
-__name(ValidateBy, "ValidateBy");
-
-// ../../node_modules/class-validator/esm5/decorator/common/IsOptional.js
-var IS_OPTIONAL = "isOptional";
-function IsOptional(validationOptions) {
-  return function(object, propertyName) {
-    var args = {
-      type: ValidationTypes.CONDITIONAL_VALIDATION,
-      name: IS_OPTIONAL,
-      target: object.constructor,
-      propertyName,
-      constraints: [
-        function(object2, value) {
-          return object2[propertyName] !== null && object2[propertyName] !== void 0;
-        }
-      ],
-      validationOptions
-    };
-    getMetadataStorage().addValidationMetadata(new ValidationMetadata(args));
-  };
-}
-__name(IsOptional, "IsOptional");
-
-// ../../node_modules/class-validator/esm5/decorator/common/ValidateNested.js
-var __assign = function() {
-  __assign = Object.assign || function(t) {
-    for (var s, i = 1, n = arguments.length; i < n; i++) {
-      s = arguments[i];
-      for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
-    }
-    return t;
-  };
-  return __assign.apply(this, arguments);
-};
-function ValidateNested(validationOptions) {
-  var opts = __assign({}, validationOptions);
-  var eachPrefix = opts.each ? "each value in " : "";
-  opts.message = opts.message || eachPrefix + "nested property $property must be either object or array";
-  return function(object, propertyName) {
-    var args = {
-      type: ValidationTypes.NESTED_VALIDATION,
-      target: object.constructor,
-      propertyName,
-      validationOptions: opts
-    };
-    getMetadataStorage().addValidationMetadata(new ValidationMetadata(args));
-  };
-}
-__name(ValidateNested, "ValidateNested");
-
-// ../../node_modules/class-validator/esm5/decorator/common/IsNotEmpty.js
-var IS_NOT_EMPTY = "isNotEmpty";
-function isNotEmpty(value) {
-  return value !== "" && value !== null && value !== void 0;
-}
-__name(isNotEmpty, "isNotEmpty");
-function IsNotEmpty(validationOptions) {
-  return ValidateBy({
-    name: IS_NOT_EMPTY,
-    validator: {
-      validate: /* @__PURE__ */ __name(function(value, args) {
-        return isNotEmpty(value);
-      }, "validate"),
-      defaultMessage: buildMessage(function(eachPrefix) {
-        return eachPrefix + "$property should not be empty";
-      }, validationOptions)
-    }
-  }, validationOptions);
-}
-__name(IsNotEmpty, "IsNotEmpty");
-
-// ../../node_modules/class-validator/esm5/decorator/typechecker/IsNumber.js
-var IS_NUMBER = "isNumber";
-function isNumber(value, options) {
-  if (options === void 0) {
-    options = {};
-  }
-  if (typeof value !== "number") {
-    return false;
-  }
-  if (value === Infinity || value === -Infinity) {
-    return !!options.allowInfinity;
-  }
-  if (Number.isNaN(value)) {
-    return !!options.allowNaN;
-  }
-  if (options.maxDecimalPlaces !== void 0) {
-    var decimalPlaces = 0;
-    if (value % 1 !== 0) {
-      decimalPlaces = value.toString().split(".")[1].length;
-    }
-    if (decimalPlaces > options.maxDecimalPlaces) {
-      return false;
-    }
-  }
-  return Number.isFinite(value);
-}
-__name(isNumber, "isNumber");
-function IsNumber(options, validationOptions) {
-  if (options === void 0) {
-    options = {};
-  }
-  return ValidateBy({
-    name: IS_NUMBER,
-    constraints: [
-      options
-    ],
-    validator: {
-      validate: /* @__PURE__ */ __name(function(value, args) {
-        return isNumber(value, args === null || args === void 0 ? void 0 : args.constraints[0]);
-      }, "validate"),
-      defaultMessage: buildMessage(function(eachPrefix) {
-        return eachPrefix + "$property must be a number conforming to the specified constraints";
-      }, validationOptions)
-    }
-  }, validationOptions);
-}
-__name(IsNumber, "IsNumber");
-
-// ../../node_modules/class-validator/esm5/decorator/typechecker/IsString.js
-var IS_STRING = "isString";
-function isString(value) {
-  return value instanceof String || typeof value === "string";
-}
-__name(isString, "isString");
-function IsString(validationOptions) {
-  return ValidateBy({
-    name: IS_STRING,
-    validator: {
-      validate: /* @__PURE__ */ __name(function(value, args) {
-        return isString(value);
-      }, "validate"),
-      defaultMessage: buildMessage(function(eachPrefix) {
-        return eachPrefix + "$property must be a string";
-      }, validationOptions)
-    }
-  }, validationOptions);
-}
-__name(IsString, "IsString");
-
-// ../../node_modules/class-validator/esm5/decorator/typechecker/IsArray.js
-var IS_ARRAY = "isArray";
-function isArray(value) {
-  return Array.isArray(value);
-}
-__name(isArray, "isArray");
-function IsArray(validationOptions) {
-  return ValidateBy({
-    name: IS_ARRAY,
-    validator: {
-      validate: /* @__PURE__ */ __name(function(value, args) {
-        return isArray(value);
-      }, "validate"),
-      defaultMessage: buildMessage(function(eachPrefix) {
-        return eachPrefix + "$property must be an array";
-      }, validationOptions)
-    }
-  }, validationOptions);
-}
-__name(IsArray, "IsArray");
-
-// ../../node_modules/class-validator/esm5/decorator/typechecker/IsObject.js
-var IS_OBJECT = "isObject";
-function isObject(value) {
-  return value != null && (typeof value === "object" || typeof value === "function") && !Array.isArray(value);
-}
-__name(isObject, "isObject");
-function IsObject(validationOptions) {
-  return ValidateBy({
-    name: IS_OBJECT,
-    validator: {
-      validate: /* @__PURE__ */ __name(function(value, args) {
-        return isObject(value);
-      }, "validate"),
-      defaultMessage: buildMessage(function(eachPrefix) {
-        return eachPrefix + "$property must be an object";
-      }, validationOptions)
-    }
-  }, validationOptions);
-}
-__name(IsObject, "IsObject");
-
-// ../../node_modules/class-transformer/esm5/enums/transformation-type.enum.js
-var TransformationType;
-(function(TransformationType2) {
-  TransformationType2[TransformationType2["PLAIN_TO_CLASS"] = 0] = "PLAIN_TO_CLASS";
-  TransformationType2[TransformationType2["CLASS_TO_PLAIN"] = 1] = "CLASS_TO_PLAIN";
-  TransformationType2[TransformationType2["CLASS_TO_CLASS"] = 2] = "CLASS_TO_CLASS";
-})(TransformationType || (TransformationType = {}));
-
-// ../../node_modules/class-transformer/esm5/MetadataStorage.js
-var MetadataStorage2 = (
-  /** @class */
-  (function() {
-    function MetadataStorage3() {
-      this._typeMetadatas = /* @__PURE__ */ new Map();
-      this._transformMetadatas = /* @__PURE__ */ new Map();
-      this._exposeMetadatas = /* @__PURE__ */ new Map();
-      this._excludeMetadatas = /* @__PURE__ */ new Map();
-      this._ancestorsMap = /* @__PURE__ */ new Map();
-    }
-    __name(MetadataStorage3, "MetadataStorage");
-    MetadataStorage3.prototype.addTypeMetadata = function(metadata) {
-      if (!this._typeMetadatas.has(metadata.target)) {
-        this._typeMetadatas.set(metadata.target, /* @__PURE__ */ new Map());
-      }
-      this._typeMetadatas.get(metadata.target).set(metadata.propertyName, metadata);
-    };
-    MetadataStorage3.prototype.addTransformMetadata = function(metadata) {
-      if (!this._transformMetadatas.has(metadata.target)) {
-        this._transformMetadatas.set(metadata.target, /* @__PURE__ */ new Map());
-      }
-      if (!this._transformMetadatas.get(metadata.target).has(metadata.propertyName)) {
-        this._transformMetadatas.get(metadata.target).set(metadata.propertyName, []);
-      }
-      this._transformMetadatas.get(metadata.target).get(metadata.propertyName).push(metadata);
-    };
-    MetadataStorage3.prototype.addExposeMetadata = function(metadata) {
-      if (!this._exposeMetadatas.has(metadata.target)) {
-        this._exposeMetadatas.set(metadata.target, /* @__PURE__ */ new Map());
-      }
-      this._exposeMetadatas.get(metadata.target).set(metadata.propertyName, metadata);
-    };
-    MetadataStorage3.prototype.addExcludeMetadata = function(metadata) {
-      if (!this._excludeMetadatas.has(metadata.target)) {
-        this._excludeMetadatas.set(metadata.target, /* @__PURE__ */ new Map());
-      }
-      this._excludeMetadatas.get(metadata.target).set(metadata.propertyName, metadata);
-    };
-    MetadataStorage3.prototype.findTransformMetadatas = function(target, propertyName, transformationType) {
-      return this.findMetadatas(this._transformMetadatas, target, propertyName).filter(function(metadata) {
-        if (!metadata.options) return true;
-        if (metadata.options.toClassOnly === true && metadata.options.toPlainOnly === true) return true;
-        if (metadata.options.toClassOnly === true) {
-          return transformationType === TransformationType.CLASS_TO_CLASS || transformationType === TransformationType.PLAIN_TO_CLASS;
-        }
-        if (metadata.options.toPlainOnly === true) {
-          return transformationType === TransformationType.CLASS_TO_PLAIN;
-        }
-        return true;
-      });
-    };
-    MetadataStorage3.prototype.findExcludeMetadata = function(target, propertyName) {
-      return this.findMetadata(this._excludeMetadatas, target, propertyName);
-    };
-    MetadataStorage3.prototype.findExposeMetadata = function(target, propertyName) {
-      return this.findMetadata(this._exposeMetadatas, target, propertyName);
-    };
-    MetadataStorage3.prototype.findExposeMetadataByCustomName = function(target, name) {
-      return this.getExposedMetadatas(target).find(function(metadata) {
-        return metadata.options && metadata.options.name === name;
-      });
-    };
-    MetadataStorage3.prototype.findTypeMetadata = function(target, propertyName) {
-      return this.findMetadata(this._typeMetadatas, target, propertyName);
-    };
-    MetadataStorage3.prototype.getStrategy = function(target) {
-      var excludeMap = this._excludeMetadatas.get(target);
-      var exclude = excludeMap && excludeMap.get(void 0);
-      var exposeMap = this._exposeMetadatas.get(target);
-      var expose = exposeMap && exposeMap.get(void 0);
-      if (exclude && expose || !exclude && !expose) return "none";
-      return exclude ? "excludeAll" : "exposeAll";
-    };
-    MetadataStorage3.prototype.getExposedMetadatas = function(target) {
-      return this.getMetadata(this._exposeMetadatas, target);
-    };
-    MetadataStorage3.prototype.getExcludedMetadatas = function(target) {
-      return this.getMetadata(this._excludeMetadatas, target);
-    };
-    MetadataStorage3.prototype.getExposedProperties = function(target, transformationType) {
-      return this.getExposedMetadatas(target).filter(function(metadata) {
-        if (!metadata.options) return true;
-        if (metadata.options.toClassOnly === true && metadata.options.toPlainOnly === true) return true;
-        if (metadata.options.toClassOnly === true) {
-          return transformationType === TransformationType.CLASS_TO_CLASS || transformationType === TransformationType.PLAIN_TO_CLASS;
-        }
-        if (metadata.options.toPlainOnly === true) {
-          return transformationType === TransformationType.CLASS_TO_PLAIN;
-        }
-        return true;
-      }).map(function(metadata) {
-        return metadata.propertyName;
-      });
-    };
-    MetadataStorage3.prototype.getExcludedProperties = function(target, transformationType) {
-      return this.getExcludedMetadatas(target).filter(function(metadata) {
-        if (!metadata.options) return true;
-        if (metadata.options.toClassOnly === true && metadata.options.toPlainOnly === true) return true;
-        if (metadata.options.toClassOnly === true) {
-          return transformationType === TransformationType.CLASS_TO_CLASS || transformationType === TransformationType.PLAIN_TO_CLASS;
-        }
-        if (metadata.options.toPlainOnly === true) {
-          return transformationType === TransformationType.CLASS_TO_PLAIN;
-        }
-        return true;
-      }).map(function(metadata) {
-        return metadata.propertyName;
-      });
-    };
-    MetadataStorage3.prototype.clear = function() {
-      this._typeMetadatas.clear();
-      this._exposeMetadatas.clear();
-      this._excludeMetadatas.clear();
-      this._ancestorsMap.clear();
-    };
-    MetadataStorage3.prototype.getMetadata = function(metadatas, target) {
-      var metadataFromTargetMap = metadatas.get(target);
-      var metadataFromTarget;
-      if (metadataFromTargetMap) {
-        metadataFromTarget = Array.from(metadataFromTargetMap.values()).filter(function(meta) {
-          return meta.propertyName !== void 0;
-        });
-      }
-      var metadataFromAncestors = [];
-      for (var _i = 0, _a = this.getAncestors(target); _i < _a.length; _i++) {
-        var ancestor = _a[_i];
-        var ancestorMetadataMap = metadatas.get(ancestor);
-        if (ancestorMetadataMap) {
-          var metadataFromAncestor = Array.from(ancestorMetadataMap.values()).filter(function(meta) {
-            return meta.propertyName !== void 0;
-          });
-          metadataFromAncestors.push.apply(metadataFromAncestors, metadataFromAncestor);
-        }
-      }
-      return metadataFromAncestors.concat(metadataFromTarget || []);
-    };
-    MetadataStorage3.prototype.findMetadata = function(metadatas, target, propertyName) {
-      var metadataFromTargetMap = metadatas.get(target);
-      if (metadataFromTargetMap) {
-        var metadataFromTarget = metadataFromTargetMap.get(propertyName);
-        if (metadataFromTarget) {
-          return metadataFromTarget;
-        }
-      }
-      for (var _i = 0, _a = this.getAncestors(target); _i < _a.length; _i++) {
-        var ancestor = _a[_i];
-        var ancestorMetadataMap = metadatas.get(ancestor);
-        if (ancestorMetadataMap) {
-          var ancestorResult = ancestorMetadataMap.get(propertyName);
-          if (ancestorResult) {
-            return ancestorResult;
-          }
-        }
-      }
-      return void 0;
-    };
-    MetadataStorage3.prototype.findMetadatas = function(metadatas, target, propertyName) {
-      var metadataFromTargetMap = metadatas.get(target);
-      var metadataFromTarget;
-      if (metadataFromTargetMap) {
-        metadataFromTarget = metadataFromTargetMap.get(propertyName);
-      }
-      var metadataFromAncestorsTarget = [];
-      for (var _i = 0, _a = this.getAncestors(target); _i < _a.length; _i++) {
-        var ancestor = _a[_i];
-        var ancestorMetadataMap = metadatas.get(ancestor);
-        if (ancestorMetadataMap) {
-          if (ancestorMetadataMap.has(propertyName)) {
-            metadataFromAncestorsTarget.push.apply(metadataFromAncestorsTarget, ancestorMetadataMap.get(propertyName));
-          }
-        }
-      }
-      return metadataFromAncestorsTarget.slice().reverse().concat((metadataFromTarget || []).slice().reverse());
-    };
-    MetadataStorage3.prototype.getAncestors = function(target) {
-      if (!target) return [];
-      if (!this._ancestorsMap.has(target)) {
-        var ancestors = [];
-        for (var baseClass = Object.getPrototypeOf(target.prototype.constructor); typeof baseClass.prototype !== "undefined"; baseClass = Object.getPrototypeOf(baseClass.prototype.constructor)) {
-          ancestors.push(baseClass);
-        }
-        this._ancestorsMap.set(target, ancestors);
-      }
-      return this._ancestorsMap.get(target);
-    };
-    return MetadataStorage3;
-  })()
-);
-
-// ../../node_modules/class-transformer/esm5/storage.js
-var defaultMetadataStorage = new MetadataStorage2();
-
-// ../../node_modules/class-transformer/esm5/decorators/type.decorator.js
-function Type(typeFunction, options) {
-  if (options === void 0) {
-    options = {};
-  }
-  return function(target, propertyName) {
-    var reflectedType = Reflect.getMetadata("design:type", target, propertyName);
-    defaultMetadataStorage.addTypeMetadata({
-      target: target.constructor,
-      propertyName,
-      reflectedType,
-      typeFunction,
-      options
-    });
-  };
-}
-__name(Type, "Type");
-
-// src/render-documento.dto.ts
+// src/render-document.dto.ts
+import { IsString, IsNotEmpty, IsArray, ValidateNested, IsOptional, IsNumber, IsBoolean, Min } from "class-validator";
+import { Type } from "class-transformer";
 function _ts_decorate3(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
@@ -1094,22 +371,82 @@ function _ts_metadata3(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
 __name(_ts_metadata3, "_ts_metadata");
+var TransformationConfig = class {
+  static {
+    __name(this, "TransformationConfig");
+  }
+  width;
+  height;
+};
+_ts_decorate3([
+  IsNumber(),
+  Min(1),
+  _ts_metadata3("design:type", Number)
+], TransformationConfig.prototype, "width", void 0);
+_ts_decorate3([
+  IsNumber(),
+  Min(1),
+  _ts_metadata3("design:type", Number)
+], TransformationConfig.prototype, "height", void 0);
+var IndentConfig = class {
+  static {
+    __name(this, "IndentConfig");
+  }
+  left;
+};
+_ts_decorate3([
+  IsOptional(),
+  IsNumber(),
+  _ts_metadata3("design:type", Number)
+], IndentConfig.prototype, "left", void 0);
+var SpacingConfig = class {
+  static {
+    __name(this, "SpacingConfig");
+  }
+  line;
+  after;
+};
+_ts_decorate3([
+  IsOptional(),
+  IsNumber(),
+  _ts_metadata3("design:type", Number)
+], SpacingConfig.prototype, "line", void 0);
+_ts_decorate3([
+  IsOptional(),
+  IsNumber(),
+  _ts_metadata3("design:type", Number)
+], SpacingConfig.prototype, "after", void 0);
 var DataItem = class {
   static {
     __name(this, "DataItem");
   }
+  size;
   text;
+  font;
   break;
   style;
   img;
+  // 🛡️ Ahora class-validator inspeccionará width y height sin borrarlos
   transformation;
   imgSource;
+  isPageNumber;
+  isTotalPages;
 };
 _ts_decorate3([
+  IsOptional(),
+  IsNumber(),
+  _ts_metadata3("design:type", Number)
+], DataItem.prototype, "size", void 0);
+_ts_decorate3([
+  IsOptional(),
   IsString(),
-  IsNotEmpty(),
   _ts_metadata3("design:type", String)
 ], DataItem.prototype, "text", void 0);
+_ts_decorate3([
+  IsOptional(),
+  IsString(),
+  _ts_metadata3("design:type", String)
+], DataItem.prototype, "font", void 0);
 _ts_decorate3([
   IsOptional(),
   IsNumber(),
@@ -1127,23 +464,41 @@ _ts_decorate3([
 ], DataItem.prototype, "img", void 0);
 _ts_decorate3([
   IsOptional(),
-  IsObject(),
-  _ts_metadata3("design:type", Object)
+  ValidateNested(),
+  Type(() => TransformationConfig),
+  _ts_metadata3("design:type", typeof TransformationConfig === "undefined" ? Object : TransformationConfig)
 ], DataItem.prototype, "transformation", void 0);
 _ts_decorate3([
   IsOptional(),
   IsString(),
   _ts_metadata3("design:type", String)
 ], DataItem.prototype, "imgSource", void 0);
+_ts_decorate3([
+  IsOptional(),
+  IsBoolean(),
+  _ts_metadata3("design:type", Boolean)
+], DataItem.prototype, "isPageNumber", void 0);
+_ts_decorate3([
+  IsOptional(),
+  IsBoolean(),
+  _ts_metadata3("design:type", Boolean)
+], DataItem.prototype, "isTotalPages", void 0);
 var ParagraphConfig = class {
   static {
     __name(this, "ParagraphConfig");
   }
+  title;
   heading;
   alignment;
+  // 🛡️ Ahora class-validator inspeccionará left, line y after sin borrarlos
   indent;
   spacing;
 };
+_ts_decorate3([
+  IsOptional(),
+  IsString(),
+  _ts_metadata3("design:type", String)
+], ParagraphConfig.prototype, "title", void 0);
 _ts_decorate3([
   IsOptional(),
   IsString(),
@@ -1156,21 +511,29 @@ _ts_decorate3([
 ], ParagraphConfig.prototype, "alignment", void 0);
 _ts_decorate3([
   IsOptional(),
-  IsObject(),
-  _ts_metadata3("design:type", Object)
+  ValidateNested(),
+  Type(() => IndentConfig),
+  _ts_metadata3("design:type", typeof IndentConfig === "undefined" ? Object : IndentConfig)
 ], ParagraphConfig.prototype, "indent", void 0);
 _ts_decorate3([
   IsOptional(),
-  IsObject(),
-  _ts_metadata3("design:type", Object)
+  ValidateNested(),
+  Type(() => SpacingConfig),
+  _ts_metadata3("design:type", typeof SpacingConfig === "undefined" ? Object : SpacingConfig)
 ], ParagraphConfig.prototype, "spacing", void 0);
 var BloqueContenido = class {
   static {
     __name(this, "BloqueContenido");
   }
-  data;
+  type;
+  data = [];
   config;
 };
+_ts_decorate3([
+  IsOptional(),
+  IsString(),
+  _ts_metadata3("design:type", String)
+], BloqueContenido.prototype, "type", void 0);
 _ts_decorate3([
   IsArray(),
   ValidateNested({
@@ -1185,24 +548,46 @@ _ts_decorate3([
   Type(() => ParagraphConfig),
   _ts_metadata3("design:type", typeof ParagraphConfig === "undefined" ? Object : ParagraphConfig)
 ], BloqueContenido.prototype, "config", void 0);
-var RenderDocumentoDto = class {
+var PageConfig = class {
   static {
-    __name(this, "RenderDocumentoDto");
+    __name(this, "PageConfig");
+  }
+  data = [];
+  alignment;
+};
+_ts_decorate3([
+  IsArray(),
+  ValidateNested({
+    each: true
+  }),
+  Type(() => DataItem),
+  _ts_metadata3("design:type", Array)
+], PageConfig.prototype, "data", void 0);
+_ts_decorate3([
+  IsOptional(),
+  IsString(),
+  _ts_metadata3("design:type", String)
+], PageConfig.prototype, "alignment", void 0);
+var RenderDocumentDto = class {
+  static {
+    __name(this, "RenderDocumentDto");
   }
   carpetaId;
   nombreArchivo;
-  bloques;
+  bloques = [];
+  header;
+  footer;
 };
 _ts_decorate3([
   IsString(),
   IsNotEmpty(),
   _ts_metadata3("design:type", String)
-], RenderDocumentoDto.prototype, "carpetaId", void 0);
+], RenderDocumentDto.prototype, "carpetaId", void 0);
 _ts_decorate3([
   IsString(),
   IsNotEmpty(),
   _ts_metadata3("design:type", String)
-], RenderDocumentoDto.prototype, "nombreArchivo", void 0);
+], RenderDocumentDto.prototype, "nombreArchivo", void 0);
 _ts_decorate3([
   IsArray(),
   ValidateNested({
@@ -1210,7 +595,19 @@ _ts_decorate3([
   }),
   Type(() => BloqueContenido),
   _ts_metadata3("design:type", Array)
-], RenderDocumentoDto.prototype, "bloques", void 0);
+], RenderDocumentDto.prototype, "bloques", void 0);
+_ts_decorate3([
+  IsOptional(),
+  ValidateNested(),
+  Type(() => PageConfig),
+  _ts_metadata3("design:type", typeof PageConfig === "undefined" ? Object : PageConfig)
+], RenderDocumentDto.prototype, "header", void 0);
+_ts_decorate3([
+  IsOptional(),
+  ValidateNested(),
+  Type(() => PageConfig),
+  _ts_metadata3("design:type", typeof PageConfig === "undefined" ? Object : PageConfig)
+], RenderDocumentDto.prototype, "footer", void 0);
 
 // src/compilador.controller.ts
 function _ts_decorate4(decorators, target, key, desc) {
@@ -1242,7 +639,7 @@ var CompiladorController = class {
   }
   async generarPdfDinamico(dto, res) {
     try {
-      const estructuraDocx = this.compilerService.compilarJSON(dto.bloques);
+      const estructuraDocx = await this.compilerService.compilarJSON(dto);
       const pdfBuffer = await this.driveDocsService.generarPdfDesdeEstructura(estructuraDocx, dto.nombreArchivo, dto.carpetaId);
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="${dto.nombreArchivo}.pdf"`);
@@ -1258,18 +655,18 @@ var CompiladorController = class {
   }
 };
 _ts_decorate4([
-  Post("generar-pdf"),
+  Post("run-engine"),
   _ts_param(0, Body()),
   _ts_param(1, Res()),
   _ts_metadata4("design:type", Function),
   _ts_metadata4("design:paramtypes", [
-    typeof RenderDocumentoDto === "undefined" ? Object : RenderDocumentoDto,
+    typeof RenderDocumentDto === "undefined" ? Object : RenderDocumentDto,
     typeof Response === "undefined" ? Object : Response
   ]),
   _ts_metadata4("design:returntype", Promise)
 ], CompiladorController.prototype, "generarPdfDinamico", null);
 CompiladorController = _ts_decorate4([
-  Controller("motor-documentos"),
+  Controller("builder-document"),
   _ts_metadata4("design:type", Function),
   _ts_metadata4("design:paramtypes", [
     typeof DocumentCompilerService === "undefined" ? Object : DocumentCompilerService,

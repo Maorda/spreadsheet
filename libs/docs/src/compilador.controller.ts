@@ -3,25 +3,27 @@ import { DocumentCompilerService } from './document-compiler.service';
 import { DriveDocsService } from './drive-docs.service';
 
 import type { Response } from 'express';
-import { RenderDocumentoDto } from './render-documento.dto';
+import { RenderDocumentDto } from './render-document.dto';
 
-@Controller('motor-documentos')
+@Controller('builder-document')
+
 export class CompiladorController {
     constructor(
         private readonly compilerService: DocumentCompilerService,
         private readonly driveDocsService: DriveDocsService
     ) { }
 
-    @Post('generar-pdf')
+    @Post('run-engine')
     async generarPdfDinamico(
-        @Body() dto: RenderDocumentoDto,
+        @Body() dto: RenderDocumentDto,
         @Res() res: Response
     ) {
         try {
             // 1. Traducir el JSON del Body a la estructura nativa de DOCX
-            const estructuraDocx = this.compilerService.compilarJSON(dto.bloques);
+            // CAMBIO CLAVE: Pasamos el 'dto' completo en lugar de 'dto.bloques'
+            const estructuraDocx = await this.compilerService.compilarJSON(dto);
 
-            // 2. Invocar nuestro orquestador estrella para convertirlo a PDF en Drive y limpiar residuo
+            // 2. Invocar nuestro orquestador para convertirlo a PDF en Drive y limpiar residuos
             const pdfBuffer = await this.driveDocsService.generarPdfDesdeEstructura(
                 estructuraDocx,
                 dto.nombreArchivo,
@@ -48,4 +50,4 @@ export class CompiladorController {
             );
         }
     }
-}
+}    
