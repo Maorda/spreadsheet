@@ -77,7 +77,7 @@ var DriveDocsService = class _DriveDocsService {
       throw error;
     } finally {
       if (tempDocId) {
-        await this.eliminarArchivo(tempDocId).catch((err) => this.logger.error(`No se pudo eliminar el archivo temporal ${tempDocId}:`, err));
+        console.log(`Archivo temporal ${tempDocId} no se elimin\xF3.`);
       }
     }
   }
@@ -144,12 +144,19 @@ var DriveDocsService = class _DriveDocsService {
         fileId,
         alt: "media"
       }, {
-        responseType: "arraybuffer"
+        responseType: "stream"
       });
-      return Buffer.from(response.data);
+      return await new Promise((resolve, reject) => {
+        const chunks = [];
+        response.data.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+        response.data.on("end", () => resolve(Buffer.concat(chunks)));
+        response.data.on("error", (err) => reject(err));
+      });
     } catch (error) {
-      this.logger.error(`Error descargando recurso de Drive (ID: ${fileId}):`, error);
-      throw new Error(`No se pudo obtener la imagen ${fileId} desde Google Drive.`);
+      const status = error?.response?.status || error?.status || "Desconocido";
+      const mensaje = error?.response?.data?.error?.message || error.message;
+      this.logger.error(`\u274C Error descargando recurso de Drive [ID: ${fileId} | HTTP: ${status}]: ${mensaje}`);
+      throw new Error(`No se pudo obtener la imagen ${fileId} desde Google Drive (HTTP ${status}).`);
     }
   }
 };
@@ -193,16 +200,31 @@ var DocumentCompilerService = class _DocumentCompilerService {
   async obtenerBufferImagen(imgId, source = "drive") {
     if (!imgId) return null;
     try {
+      let buffer = null;
       if (source === "web") {
         const response = await import_axios.default.get(imgId, {
           responseType: "arraybuffer"
         });
-        return Buffer.from(response.data, "binary");
+        buffer = Buffer.from(response.data, "binary");
+      } else if (source === "drive") {
+        buffer = await this.driveDocsService.obtenerArchivoComoBuffer(imgId);
+      } else {
+        buffer = this.cargarImagenLocal(imgId);
       }
-      if (source === "drive") {
-        return await this.driveDocsService.obtenerArchivoComoBuffer(imgId);
+      if (!buffer || buffer.length === 0) {
+        this.logger.warn(`\u26A0\uFE0F El buffer de la imagen [${imgId}] lleg\xF3 vac\xEDo desde [${source}].`);
+        return null;
       }
-      return this.cargarImagenLocal(imgId);
+      const hexHeader = buffer.subarray(0, 4).toString("hex").toLowerCase();
+      const esPng = hexHeader.startsWith("89504e47");
+      const esJpg = hexHeader.startsWith("ffd8");
+      const esWebp = buffer.subarray(8, 12).toString("ascii") === "WEBP";
+      if (!esPng && !esJpg && !esWebp) {
+        const posibleTexto = buffer.subarray(0, 50).toString("utf8");
+        this.logger.error(`\u274C [${imgId}] no es una imagen v\xE1lida. Cabecera Hex: [${hexHeader}]. Contenido devuelto: ${posibleTexto}`);
+        return null;
+      }
+      return buffer;
     } catch (error) {
       this.logger.error(`\u274C Error obteniendo imagen [${imgId}] desde [${source}]: ${error.message}`);
       return null;
@@ -233,17 +255,36 @@ var DocumentCompilerService = class _DocumentCompilerService {
         }));
       } else if (item.img) {
         const source = item.imgSource || "drive";
+        this.logger.debug(`\u{1F5BC}\uFE0F [BuildParagraph] Procesando imagen [ID: ${item.img} | Origen: ${source}]...`);
         const bufferImagen = await this.obtenerBufferImagen(item.img, source);
-        if (bufferImagen) {
+        if (!bufferImagen || bufferImagen.length === 0) {
+          this.logger.warn(`\u26A0\uFE0F [BuildParagraph] El buffer para la imagen [${item.img}] lleg\xF3 nulo o vac\xEDo. Se omitir\xE1 del p\xE1rrafo.`);
+        } else {
+          const hexHeader = bufferImagen.subarray(0, 4).toString("hex").toUpperCase();
           const tipoImagen = this.obtenerTipoImagen(bufferImagen);
-          runs.push(new import_docx2.ImageRun({
-            data: bufferImagen,
-            transformation: {
-              width: item.transformation?.width ?? 100,
-              height: item.transformation?.height ?? 100
-            },
-            type: tipoImagen
-          }));
+          const ancho = item.transformation?.width ?? 100;
+          const alto = item.transformation?.height ?? 100;
+          this.logger.log(`\u{1F4CA} [Diagnostics] Img ID: ${item.img} | Peso: ${bufferImagen.length} bytes | Hex: [${hexHeader}] | Tipo detectado: "${tipoImagen}" | Dimensiones: ${ancho}x${alto}`);
+          if (!tipoImagen) {
+            this.logger.error(`\u274C [BuildParagraph] No se pudo determinar el tipo de archivo para [${item.img}]. El Hex [${hexHeader}] no coincide con PNG/JPG. Imagen descartada.`);
+          } else {
+            if (typeof tipoImagen === "string" && tipoImagen.includes("/")) {
+              this.logger.warn(`\u26A0\uFE0F [BuildParagraph] CUIDADO: obtenerTipoImagen devolvi\xF3 "${tipoImagen}". La librer\xEDa docx y Google Docs suelen exigir la extensi\xF3n simple ('png', 'jpg') sin el prefijo 'image/'.`);
+            }
+            try {
+              runs.push(new import_docx2.ImageRun({
+                data: bufferImagen,
+                transformation: {
+                  width: ancho,
+                  height: alto
+                },
+                type: tipoImagen
+              }));
+              this.logger.debug(`\u2705 [BuildParagraph] ImageRun creado con \xE9xito para [${item.img}].`);
+            } catch (imgError) {
+              this.logger.error(`\u274C [BuildParagraph] Error fatal al instanciar ImageRun para [${item.img}]: ${imgError.message}`, imgError.stack);
+            }
+          }
         }
       } else {
         if (item.break) {
@@ -257,7 +298,10 @@ var DocumentCompilerService = class _DocumentCompilerService {
             text: item.text || "",
             bold: item.style === "strong",
             font: item.font || "Arial",
-            size: item.size || 22
+            size: item.size || 22,
+            // 🛡️ PRO-TIP: Eliminamos el '#' si viene incluido para evitar errores en Word
+            color: item.color ? item.color.replace("#", "") : void 0,
+            underline: item.underline ? {} : void 0
           }));
         }
       }
@@ -287,6 +331,16 @@ var DocumentCompilerService = class _DocumentCompilerService {
           headingStyleRange: "1-3"
         });
       }
+      if (bloque.type === "page-break") {
+        return new import_docx2.Paragraph({
+          children: [
+            new import_docx2.PageBreak()
+          ]
+        });
+      }
+      if (bloque.type === "table" && Array.isArray(bloque.rows)) {
+        return await this.buildTable(bloque.rows);
+      }
       return this.buildParagraph(bloque.data || [], bloque.config);
     }));
     let headers = void 0;
@@ -303,15 +357,16 @@ var DocumentCompilerService = class _DocumentCompilerService {
       };
     }
     let footers = void 0;
-    if (dto?.footer && Array.isArray(dto.footer.data)) {
-      const footerParagraph = await this.buildParagraph(dto.footer.data, {
-        alignment: dto.footer.alignment
-      });
+    if (dto?.footer && Array.isArray(dto.footer) && dto.footer.length > 0) {
+      const footerChildren = await Promise.all(dto.footer.map(async (bloque) => {
+        if (bloque.type === "table" && Array.isArray(bloque.rows)) {
+          return await this.buildTable(bloque.rows);
+        }
+        return this.buildParagraph(bloque.data || [], bloque.config);
+      }));
       footers = {
         default: new import_docx2.Footer({
-          children: [
-            footerParagraph
-          ]
+          children: footerChildren
         })
       };
     }
@@ -383,6 +438,38 @@ var DocumentCompilerService = class _DocumentCompilerService {
     }
     return "png";
   }
+  async buildTable(rowsData) {
+    const tableRows = [];
+    const ANCHO_MAXIMO_DXA = 9026;
+    for (const row of rowsData) {
+      const tableCells = [];
+      for (const cell of row.cells || []) {
+        const cellParagraph = await this.buildParagraph(cell.content || [], {
+          alignment: cell.alignment
+        });
+        const widthConfig = cell.width ? {
+          size: Math.round(cell.width / 100 * ANCHO_MAXIMO_DXA),
+          type: import_docx2.WidthType.DXA
+        } : void 0;
+        tableCells.push(new import_docx2.TableCell({
+          children: [
+            cellParagraph
+          ],
+          width: widthConfig
+        }));
+      }
+      tableRows.push(new import_docx2.TableRow({
+        children: tableCells
+      }));
+    }
+    return new import_docx2.Table({
+      rows: tableRows,
+      width: {
+        size: ANCHO_MAXIMO_DXA,
+        type: import_docx2.WidthType.DXA
+      }
+    });
+  }
 };
 DocumentCompilerService = _ts_decorate2([
   (0, import_common2.Injectable)(),
@@ -406,6 +493,84 @@ function _ts_metadata3(k, v) {
   if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 }
 __name(_ts_metadata3, "_ts_metadata");
+var CellConfig = class {
+  static {
+    __name(this, "CellConfig");
+  }
+  content = [];
+  width;
+  alignment;
+};
+_ts_decorate3([
+  (0, import_class_validator.IsArray)(),
+  (0, import_class_validator.ValidateNested)({
+    each: true
+  }),
+  (0, import_class_transformer.Type)(() => DataItem),
+  _ts_metadata3("design:type", Array)
+], CellConfig.prototype, "content", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsNumber)(),
+  _ts_metadata3("design:type", Number)
+], CellConfig.prototype, "width", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsString)(),
+  _ts_metadata3("design:type", String)
+], CellConfig.prototype, "alignment", void 0);
+var RowConfig = class {
+  static {
+    __name(this, "RowConfig");
+  }
+  cells = [];
+};
+_ts_decorate3([
+  (0, import_class_validator.IsArray)(),
+  (0, import_class_validator.ValidateNested)({
+    each: true
+  }),
+  (0, import_class_transformer.Type)(() => CellConfig),
+  _ts_metadata3("design:type", Array)
+], RowConfig.prototype, "cells", void 0);
+var BloqueContenido = class {
+  static {
+    __name(this, "BloqueContenido");
+  }
+  type;
+  data = [];
+  rows = [];
+  config;
+};
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsString)(),
+  _ts_metadata3("design:type", String)
+], BloqueContenido.prototype, "type", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsArray)(),
+  (0, import_class_validator.ValidateNested)({
+    each: true
+  }),
+  (0, import_class_transformer.Type)(() => DataItem),
+  _ts_metadata3("design:type", Array)
+], BloqueContenido.prototype, "data", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsArray)(),
+  (0, import_class_validator.ValidateNested)({
+    each: true
+  }),
+  (0, import_class_transformer.Type)(() => RowConfig),
+  _ts_metadata3("design:type", Array)
+], BloqueContenido.prototype, "rows", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.ValidateNested)(),
+  (0, import_class_transformer.Type)(() => ParagraphConfig),
+  _ts_metadata3("design:type", typeof ParagraphConfig === "undefined" ? Object : ParagraphConfig)
+], BloqueContenido.prototype, "config", void 0);
 var TransformationConfig = class {
   static {
     __name(this, "TransformationConfig");
@@ -440,6 +605,7 @@ var SpacingConfig = class {
   }
   line;
   after;
+  before;
 };
 _ts_decorate3([
   (0, import_class_validator.IsOptional)(),
@@ -451,6 +617,11 @@ _ts_decorate3([
   (0, import_class_validator.IsNumber)(),
   _ts_metadata3("design:type", Number)
 ], SpacingConfig.prototype, "after", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsNumber)(),
+  _ts_metadata3("design:type", Number)
+], SpacingConfig.prototype, "before", void 0);
 var DataItem = class {
   static {
     __name(this, "DataItem");
@@ -466,6 +637,8 @@ var DataItem = class {
   imgSource;
   isPageNumber;
   isTotalPages;
+  color;
+  underline;
 };
 _ts_decorate3([
   (0, import_class_validator.IsOptional)(),
@@ -518,6 +691,16 @@ _ts_decorate3([
   (0, import_class_validator.IsBoolean)(),
   _ts_metadata3("design:type", Boolean)
 ], DataItem.prototype, "isTotalPages", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsString)(),
+  _ts_metadata3("design:type", String)
+], DataItem.prototype, "color", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsBoolean)(),
+  _ts_metadata3("design:type", Boolean)
+], DataItem.prototype, "underline", void 0);
 var ParagraphConfig = class {
   static {
     __name(this, "ParagraphConfig");
@@ -556,33 +739,6 @@ _ts_decorate3([
   (0, import_class_transformer.Type)(() => SpacingConfig),
   _ts_metadata3("design:type", typeof SpacingConfig === "undefined" ? Object : SpacingConfig)
 ], ParagraphConfig.prototype, "spacing", void 0);
-var BloqueContenido = class {
-  static {
-    __name(this, "BloqueContenido");
-  }
-  type;
-  data = [];
-  config;
-};
-_ts_decorate3([
-  (0, import_class_validator.IsOptional)(),
-  (0, import_class_validator.IsString)(),
-  _ts_metadata3("design:type", String)
-], BloqueContenido.prototype, "type", void 0);
-_ts_decorate3([
-  (0, import_class_validator.IsArray)(),
-  (0, import_class_validator.ValidateNested)({
-    each: true
-  }),
-  (0, import_class_transformer.Type)(() => DataItem),
-  _ts_metadata3("design:type", Array)
-], BloqueContenido.prototype, "data", void 0);
-_ts_decorate3([
-  (0, import_class_validator.IsOptional)(),
-  (0, import_class_validator.ValidateNested)(),
-  (0, import_class_transformer.Type)(() => ParagraphConfig),
-  _ts_metadata3("design:type", typeof ParagraphConfig === "undefined" ? Object : ParagraphConfig)
-], BloqueContenido.prototype, "config", void 0);
 var PageConfig = class {
   static {
     __name(this, "PageConfig");
@@ -611,7 +767,7 @@ var RenderDocumentDto = class {
   nombreArchivo;
   bloques = [];
   header;
-  footer;
+  footer = [];
 };
 _ts_decorate3([
   (0, import_class_validator.IsString)(),
@@ -639,9 +795,12 @@ _ts_decorate3([
 ], RenderDocumentDto.prototype, "header", void 0);
 _ts_decorate3([
   (0, import_class_validator.IsOptional)(),
-  (0, import_class_validator.ValidateNested)(),
-  (0, import_class_transformer.Type)(() => PageConfig),
-  _ts_metadata3("design:type", typeof PageConfig === "undefined" ? Object : PageConfig)
+  (0, import_class_validator.IsArray)(),
+  (0, import_class_validator.ValidateNested)({
+    each: true
+  }),
+  (0, import_class_transformer.Type)(() => BloqueContenido),
+  _ts_metadata3("design:type", Array)
 ], RenderDocumentDto.prototype, "footer", void 0);
 
 // src/compilador.controller.ts

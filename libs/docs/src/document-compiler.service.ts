@@ -10,7 +10,15 @@ import {
     Header,
     Footer,
     PageNumber,
+    PageBreak,
+    Table,
+    TableRow,
+    TableCell,
+    WidthType,
 } from 'docx';
+
+const ANCHO_TOTAL_PAGINA_DXA = 9026;
+
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -18,6 +26,7 @@ import {
     DataItem,
     ParagraphConfig,
     RenderDocumentDto,
+    RowConfig,
 } from './render-document.dto';
 import { DriveDocsService } from './drive-docs.service';
 import axios from 'axios';
@@ -35,14 +44,38 @@ export class DocumentCompilerService {
         if (!imgId) return null;
 
         try {
+            let buffer: Buffer | null = null;
+
             if (source === 'web') {
                 const response = await axios.get(imgId, { responseType: 'arraybuffer' });
-                return Buffer.from(response.data, 'binary');
+                buffer = Buffer.from(response.data, 'binary');
+            } else if (source === 'drive') {
+                buffer = await this.driveDocsService.obtenerArchivoComoBuffer(imgId);
+            } else {
+                buffer = this.cargarImagenLocal(imgId); // Fallback local
             }
-            if (source === 'drive') {
-                return await this.driveDocsService.obtenerArchivoComoBuffer(imgId);
+
+            if (!buffer || buffer.length === 0) {
+                this.logger.warn(`⚠️ El buffer de la imagen [${imgId}] llegó vacío desde [${source}].`);
+                return null;
             }
-            return this.cargarImagenLocal(imgId); // Fallback local
+
+            // --- Auditoría de Firma Hexadecimal (Magic Numbers) ---
+            const hexHeader = buffer.subarray(0, 4).toString('hex').toLowerCase();
+            const esPng = hexHeader.startsWith('89504e47');
+            const esJpg = hexHeader.startsWith('ffd8');
+            const esWebp = buffer.subarray(8, 12).toString('ascii') === 'WEBP'; // RIFF....WEBP
+
+            if (!esPng && !esJpg && !esWebp) {
+                // Comprobamos si nos devolvió un texto/JSON en vez de una imagen (ej. error 403 de Google Drive)
+                const posibleTexto = buffer.subarray(0, 50).toString('utf8');
+                this.logger.error(
+                    `❌ [${imgId}] no es una imagen válida. Cabecera Hex: [${hexHeader}]. Contenido devuelto: ${posibleTexto}`,
+                );
+                return null;
+            }
+
+            return buffer;
         } catch (error) {
             this.logger.error(
                 `❌ Error obteniendo imagen [${imgId}] desde [${source}]: ${error.message}`,
@@ -85,23 +118,49 @@ export class DocumentCompilerService {
                     }),
                 );
             }
-            // 3. Imágenes
+            // 3. Imágenes (CON PATRÓN DE LOGGING ESTRATÉGICO)
             else if (item.img) {
                 const source = (item as any).imgSource || 'drive';
+                this.logger.debug(`🖼️ [BuildParagraph] Procesando imagen [ID: ${item.img} | Origen: ${source}]...`);
+
                 const bufferImagen = await this.obtenerBufferImagen(item.img, source);
 
-                if (bufferImagen) {
+                if (!bufferImagen || bufferImagen.length === 0) {
+                    this.logger.warn(`⚠️ [BuildParagraph] El buffer para la imagen [${item.img}] llegó nulo o vacío. Se omitirá del párrafo.`);
+                } else {
+                    // Inspeccionamos los primeros 4 bytes del binario
+                    const hexHeader = bufferImagen.subarray(0, 4).toString('hex').toUpperCase();
                     const tipoImagen = this.obtenerTipoImagen(bufferImagen);
-                    runs.push(
-                        new ImageRun({
-                            data: bufferImagen,
-                            transformation: {
-                                width: item.transformation?.width ?? 100,
-                                height: item.transformation?.height ?? 100,
-                            },
-                            type: tipoImagen,
-                        }),
+                    const ancho = item.transformation?.width ?? 100;
+                    const alto = item.transformation?.height ?? 100;
+
+                    // 🎯 LOG DE DIAGNÓSTICO: Esto nos dirá la verdad absoluta de lo que está pasando
+                    this.logger.log(
+                        `📊 [Diagnostics] Img ID: ${item.img} | Peso: ${bufferImagen.length} bytes | Hex: [${hexHeader}] | Tipo detectado: "${tipoImagen}" | Dimensiones: ${ancho}x${alto}`
                     );
+
+                    // Validación de seguridad para la librería 'docx' y Google Docs
+                    if (!tipoImagen) {
+                        this.logger.error(`❌ [BuildParagraph] No se pudo determinar el tipo de archivo para [${item.img}]. El Hex [${hexHeader}] no coincide con PNG/JPG. Imagen descartada.`);
+                    } else {
+                        // Alerta si el tipo detectado es un MIME type (ej. "image/png") en lugar de extensión ("png")
+                        if (typeof tipoImagen === 'string' && tipoImagen.includes('/')) {
+                            this.logger.warn(`⚠️ [BuildParagraph] CUIDADO: obtenerTipoImagen devolvió "${tipoImagen}". La librería docx y Google Docs suelen exigir la extensión simple ('png', 'jpg') sin el prefijo 'image/'.`);
+                        }
+
+                        try {
+                            runs.push(
+                                new ImageRun({
+                                    data: bufferImagen,
+                                    transformation: { width: ancho, height: alto },
+                                    type: tipoImagen as any,
+                                }),
+                            );
+                            this.logger.debug(`✅ [BuildParagraph] ImageRun creado con éxito para [${item.img}].`);
+                        } catch (imgError: any) {
+                            this.logger.error(`❌ [BuildParagraph] Error fatal al instanciar ImageRun para [${item.img}]: ${imgError.message}`, imgError.stack);
+                        }
+                    }
                 }
             }
             // 4. Texto normal o Saltos de línea
@@ -116,6 +175,9 @@ export class DocumentCompilerService {
                             bold: item.style === 'strong',
                             font: item.font || 'Arial',
                             size: item.size || 22,
+                            // 🛡️ PRO-TIP: Eliminamos el '#' si viene incluido para evitar errores en Word
+                            color: item.color ? item.color.replace('#', '') : undefined,
+                            underline: item.underline ? {} : undefined,
                         }),
                     );
                 }
@@ -150,11 +212,11 @@ export class DocumentCompilerService {
         // 🛡️ BLINDAJE 3: Si dto.bloques llega undefined o nulo, inicializamos como array vacío
         const bloquesSeguros = Array.isArray(dto?.bloques) ? dto.bloques : [];
 
-        // 1. Procesar el contenido principal (Cuerpo del documento)
         const paragraphChildren = await Promise.all(
             bloquesSeguros.map(async (bloque) => {
                 if (!bloque) return new Paragraph({});
 
+                // CASO 1: Índice (TOC)
                 if (bloque.type === 'toc') {
                     const titulo = bloque.config?.title || 'Índice';
                     return new TableOfContents(titulo, {
@@ -162,7 +224,20 @@ export class DocumentCompilerService {
                         headingStyleRange: '1-3',
                     });
                 }
-                // Pasamos bloque.data de forma segura
+
+                // CASO 2: Salto de página explícito
+                if (bloque.type === 'page-break') {
+                    return new Paragraph({
+                        children: [new PageBreak()],
+                    });
+                }
+
+                // CASO 3: Tablas dinámicas
+                if (bloque.type === 'table' && Array.isArray(bloque.rows)) {
+                    return await this.buildTable(bloque.rows);
+                }
+
+                // CASO 4: Párrafo normal por defecto
                 return this.buildParagraph(bloque.data || [], bloque.config);
             }),
         );
@@ -178,11 +253,20 @@ export class DocumentCompilerService {
 
         // 3. Procesar Footer (si viene en el JSON y tiene datos)
         let footers: any = undefined;
-        if (dto?.footer && Array.isArray(dto.footer.data)) {
-            const footerParagraph = await this.buildParagraph(dto.footer.data, {
-                alignment: dto.footer.alignment,
-            });
-            footers = { default: new Footer({ children: [footerParagraph] }) };
+        if (dto?.footer && Array.isArray(dto.footer) && dto.footer.length > 0) {
+            const footerChildren = await Promise.all(
+                dto.footer.map(async (bloque) => {
+                    // Reutilizamos la lógica de bloques que ya tienes hecha
+                    if (bloque.type === 'table' && Array.isArray(bloque.rows)) {
+                        return await this.buildTable(bloque.rows);
+                    }
+                    return this.buildParagraph(bloque.data || [], bloque.config);
+                })
+            );
+
+            footers = {
+                default: new Footer({ children: footerChildren })
+            };
         }
 
         // 4. Retornar la sección completa
@@ -268,5 +352,42 @@ export class DocumentCompilerService {
         }
 
         return 'png'; // Si no se reconoce, intentamos incrustarlo como PNG
+    }
+    private async buildTable(rowsData: RowConfig[]): Promise<Table> {
+        const tableRows: TableRow[] = [];
+        const ANCHO_MAXIMO_DXA = 9026;
+
+        for (const row of rowsData) {
+            const tableCells: TableCell[] = [];
+
+            for (const cell of (row.cells || [])) {
+                const cellParagraph = await this.buildParagraph(cell.content || [], {
+                    alignment: cell.alignment,
+                });
+
+                // ✅ SOLUCIÓN: Usamos const y operador ternario. 
+                // TypeScript inferirá automáticamente: { size: number; type: string; } | undefined
+                const widthConfig = cell.width
+                    ? {
+                        size: Math.round((cell.width / 100) * ANCHO_MAXIMO_DXA),
+                        type: WidthType.DXA,
+                    }
+                    : undefined;
+
+                tableCells.push(
+                    new TableCell({
+                        children: [cellParagraph],
+                        width: widthConfig,
+                    })
+                );
+            }
+
+            tableRows.push(new TableRow({ children: tableCells }));
+        }
+
+        return new Table({
+            rows: tableRows,
+            width: { size: ANCHO_MAXIMO_DXA, type: WidthType.DXA },
+        });
     }
 }

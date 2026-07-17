@@ -42,9 +42,11 @@ export class DriveDocsService {
         } finally {
             // 4. Limpieza: Eliminamos el archivo de Google Drive pase lo que pase en el 'try'
             if (tempDocId) {
-                await this.eliminarArchivo(tempDocId).catch((err) =>
+                /*await this.eliminarArchivo(tempDocId).catch((err) =>
                     this.logger.error(`No se pudo eliminar el archivo temporal ${tempDocId}:`, err)
-                );
+                
+                );*/
+                console.log(`Archivo temporal ${tempDocId} no se eliminó.`);
             }
         }
     }
@@ -123,21 +125,35 @@ export class DriveDocsService {
  */
     async obtenerArchivoComoBuffer(fileId: string): Promise<Buffer> {
         try {
+            // 1. Solicitamos el archivo como 'stream' (evita bugs de gaxios con arraybuffer)
             const response = await this.googleClient.drive.files.get(
                 {
                     fileId: fileId,
-                    alt: 'media', // ¡CRUCIAL! Esto le dice a la API que queremos el contenido, no los metadatos
+                    alt: 'media',
                 },
                 {
-                    responseType: 'arraybuffer', // Para recibir el contenido como binario directo
+                    responseType: 'stream',
                 }
             );
 
-            // Convertimos el ArrayBuffer nativo a Buffer de Node.js
-            return Buffer.from(response.data as ArrayBuffer);
-        } catch (error) {
-            this.logger.error(`Error descargando recurso de Drive (ID: ${fileId}):`, error);
-            throw new Error(`No se pudo obtener la imagen ${fileId} desde Google Drive.`);
+            // 2. Acumulamos los fragmentos (chunks) en un Buffer nativo de Node.js
+            return await new Promise<Buffer>((resolve, reject) => {
+                const chunks: Buffer[] = [];
+
+                response.data.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+                response.data.on('end', () => resolve(Buffer.concat(chunks)));
+                response.data.on('error', (err: any) => reject(err));
+            });
+        } catch (error: any) {
+            // Extraemos el código HTTP para diagnosticar si es un problema de permisos (403/404)
+            const status = error?.response?.status || error?.status || 'Desconocido';
+            const mensaje = error?.response?.data?.error?.message || error.message;
+
+            this.logger.error(
+                `❌ Error descargando recurso de Drive [ID: ${fileId} | HTTP: ${status}]: ${mensaje}`,
+            );
+
+            throw new Error(`No se pudo obtener la imagen ${fileId} desde Google Drive (HTTP ${status}).`);
         }
     }
 

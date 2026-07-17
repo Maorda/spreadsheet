@@ -10,6 +10,52 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
+export class CellConfig {
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => DataItem)
+    content: DataItem[] = [];
+
+    @IsOptional()
+    @IsNumber()
+    width?: number; // Ancho en porcentaje o dxa
+
+    @IsOptional()
+    @IsString()
+    alignment?: 'left' | 'right' | 'center';
+}
+
+export class RowConfig {
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => CellConfig)
+    cells: CellConfig[] = [];
+}
+
+// 5. Actualizamos BloqueContenido
+export class BloqueContenido {
+    @IsOptional()
+    @IsString()
+    type?: 'text' | 'toc' | 'page-break' | 'table'; // <-- Agregamos page-break y table
+
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => DataItem)
+    data?: DataItem[] = [];
+
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => RowConfig)
+    rows?: RowConfig[] = []; // <-- Propiedad para alimentar las tablas
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => ParagraphConfig)
+    config?: ParagraphConfig;
+}
+
 // 1. Clases auxiliares para blindar las propiedades anidadas contra el whitelist: true
 export class TransformationConfig {
     @IsNumber()
@@ -35,6 +81,10 @@ export class SpacingConfig {
     @IsOptional()
     @IsNumber()
     after?: number;
+
+    @IsOptional()
+    @IsNumber()
+    before?: number;
 }
 
 // 2. DataItem con objetos anidadas transformados
@@ -80,6 +130,14 @@ export class DataItem {
     @IsOptional()
     @IsBoolean()
     isTotalPages?: boolean;
+
+    @IsOptional()
+    @IsString()
+    color?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    underline?: boolean;
 }
 
 // 3. ParagraphConfig con indent y spacing transformados
@@ -108,22 +166,6 @@ export class ParagraphConfig {
     spacing?: SpacingConfig;
 }
 
-export class BloqueContenido {
-    @IsOptional()
-    @IsString()
-    type?: 'text' | 'toc';
-
-    @IsArray()
-    @ValidateNested({ each: true })
-    @Type(() => DataItem)
-    data: DataItem[] = []; // 🛡️ Inicializado por defecto para evitar "data is not iterable"
-
-    @IsOptional()
-    @ValidateNested()
-    @Type(() => ParagraphConfig)
-    config?: ParagraphConfig;
-}
-
 export class PageConfig {
     @IsArray()
     @ValidateNested({ each: true })
@@ -133,6 +175,8 @@ export class PageConfig {
     @IsOptional()
     @IsString()
     alignment?: 'left' | 'right' | 'center';
+
+
 }
 
 export class RenderDocumentDto {
@@ -155,7 +199,8 @@ export class RenderDocumentDto {
     header?: PageConfig;
 
     @IsOptional()
-    @ValidateNested()
-    @Type(() => PageConfig)
-    footer?: PageConfig;
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => BloqueContenido)
+    footer?: BloqueContenido[] = [];
 }
