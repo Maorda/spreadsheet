@@ -15,6 +15,8 @@ import {
     TableRow,
     TableCell,
     WidthType,
+    TableLayoutType,
+    VerticalAlign,
 } from 'docx';
 
 const ANCHO_TOTAL_PAGINA_DXA = 9026;
@@ -67,7 +69,6 @@ export class DocumentCompilerService {
             const esWebp = buffer.subarray(8, 12).toString('ascii') === 'WEBP'; // RIFF....WEBP
 
             if (!esPng && !esJpg && !esWebp) {
-                // Comprobamos si nos devolvió un texto/JSON en vez de una imagen (ej. error 403 de Google Drive)
                 const posibleTexto = buffer.subarray(0, 50).toString('utf8');
                 this.logger.error(
                     `❌ [${imgId}] no es una imagen válida. Cabecera Hex: [${hexHeader}]. Contenido devuelto: ${posibleTexto}`,
@@ -89,14 +90,11 @@ export class DocumentCompilerService {
         config?: ParagraphConfig | { alignment?: string },
     ): Promise<Paragraph> {
         const runs: any[] = [];
-
-        // 🛡️ BLINDAJE 1: Si 'data' llega undefined (borrado por el DTO) o no es un array, usamos un array vacío
         const itemsSeguros = Array.isArray(data) ? data : [];
 
         for (const item of itemsSeguros) {
-            if (!item) continue; // Si hay un elemento nulo dentro del array, lo saltamos
+            if (!item) continue;
 
-            // 1. Número de página actual
             if (item.isPageNumber) {
                 runs.push(
                     new TextRun({
@@ -107,7 +105,6 @@ export class DocumentCompilerService {
                     }),
                 );
             }
-            // 2. Número total de páginas
             else if (item.isTotalPages) {
                 runs.push(
                     new TextRun({
@@ -118,7 +115,6 @@ export class DocumentCompilerService {
                     }),
                 );
             }
-            // 3. Imágenes (CON PATRÓN DE LOGGING ESTRATÉGICO)
             else if (item.img) {
                 const source = (item as any).imgSource || 'drive';
                 this.logger.debug(`🖼️ [BuildParagraph] Procesando imagen [ID: ${item.img} | Origen: ${source}]...`);
@@ -128,26 +124,18 @@ export class DocumentCompilerService {
                 if (!bufferImagen || bufferImagen.length === 0) {
                     this.logger.warn(`⚠️ [BuildParagraph] El buffer para la imagen [${item.img}] llegó nulo o vacío. Se omitirá del párrafo.`);
                 } else {
-                    // Inspeccionamos los primeros 4 bytes del binario
                     const hexHeader = bufferImagen.subarray(0, 4).toString('hex').toUpperCase();
                     const tipoImagen = this.obtenerTipoImagen(bufferImagen);
                     const ancho = item.transformation?.width ?? 100;
                     const alto = item.transformation?.height ?? 100;
 
-                    // 🎯 LOG DE DIAGNÓSTICO: Esto nos dirá la verdad absoluta de lo que está pasando
                     this.logger.log(
                         `📊 [Diagnostics] Img ID: ${item.img} | Peso: ${bufferImagen.length} bytes | Hex: [${hexHeader}] | Tipo detectado: "${tipoImagen}" | Dimensiones: ${ancho}x${alto}`
                     );
 
-                    // Validación de seguridad para la librería 'docx' y Google Docs
                     if (!tipoImagen) {
                         this.logger.error(`❌ [BuildParagraph] No se pudo determinar el tipo de archivo para [${item.img}]. El Hex [${hexHeader}] no coincide con PNG/JPG. Imagen descartada.`);
                     } else {
-                        // Alerta si el tipo detectado es un MIME type (ej. "image/png") en lugar de extensión ("png")
-                        if (typeof tipoImagen === 'string' && tipoImagen.includes('/')) {
-                            this.logger.warn(`⚠️ [BuildParagraph] CUIDADO: obtenerTipoImagen devolvió "${tipoImagen}". La librería docx y Google Docs suelen exigir la extensión simple ('png', 'jpg') sin el prefijo 'image/'.`);
-                        }
-
                         try {
                             runs.push(
                                 new ImageRun({
@@ -163,7 +151,6 @@ export class DocumentCompilerService {
                     }
                 }
             }
-            // 4. Texto normal o Saltos de línea
             else {
                 if (item.break) {
                     runs.push(new TextRun({ text: '', break: item.break }));
@@ -175,7 +162,6 @@ export class DocumentCompilerService {
                             bold: item.style === 'strong',
                             font: item.font || 'Arial',
                             size: item.size || 22,
-                            // 🛡️ PRO-TIP: Eliminamos el '#' si viene incluido para evitar errores en Word
                             color: item.color ? item.color.replace('#', '') : undefined,
                             underline: item.underline ? {} : undefined,
                         }),
@@ -184,7 +170,6 @@ export class DocumentCompilerService {
             }
         }
 
-        // 🛡️ BLINDAJE 2: Extracción segura de configuraciones
         const alignment = this.mapAlignment(config?.alignment);
         const heading =
             config && 'heading' in config
@@ -209,14 +194,12 @@ export class DocumentCompilerService {
     }
 
     async compilarJSON(dto: RenderDocumentDto): Promise<ISectionOptions> {
-        // 🛡️ BLINDAJE 3: Si dto.bloques llega undefined o nulo, inicializamos como array vacío
         const bloquesSeguros = Array.isArray(dto?.bloques) ? dto.bloques : [];
 
         const paragraphChildren = await Promise.all(
             bloquesSeguros.map(async (bloque) => {
                 if (!bloque) return new Paragraph({});
 
-                // CASO 1: Índice (TOC)
                 if (bloque.type === 'toc') {
                     const titulo = bloque.config?.title || 'Índice';
                     return new TableOfContents(titulo, {
@@ -225,40 +208,50 @@ export class DocumentCompilerService {
                     });
                 }
 
-                // CASO 2: Salto de página explícito
                 if (bloque.type === 'page-break') {
                     return new Paragraph({
                         children: [new PageBreak()],
                     });
                 }
 
-                // CASO 3: Tablas dinámicas
+                // 🔄 REFACTORIZADO: Pasamos el config del bloque para capturar los borders
                 if (bloque.type === 'table' && Array.isArray(bloque.rows)) {
-                    return await this.buildTable(bloque.rows);
+                    return await this.buildTable(bloque.rows, bloque.config);
                 }
 
-                // CASO 4: Párrafo normal por defecto
                 return this.buildParagraph(bloque.data || [], bloque.config);
             }),
         );
 
-        // 2. Procesar Header (si viene en el JSON y tiene datos)
         let headers: any = undefined;
-        if (dto?.header && Array.isArray(dto.header.data)) {
-            const headerParagraph = await this.buildParagraph(dto.header.data, {
-                alignment: dto.header.alignment,
-            });
-            headers = { default: new Header({ children: [headerParagraph] }) };
+        if (dto?.header && Array.isArray(dto.header) && dto.header.length > 0) {
+            const headerChildren = await Promise.all(
+                dto.header.map(async (bloque) => {
+                    if (!bloque) return new Paragraph({});
+
+                    // 🔄 REFACTORIZADO: Soporte para tablas con bordes en cabecera
+                    if (bloque.type === 'table' && Array.isArray(bloque.rows)) {
+                        return await this.buildTable(bloque.rows, bloque.config);
+                    }
+
+                    return this.buildParagraph(bloque.data || [], bloque.config);
+                })
+            );
+
+            headers = {
+                default: new Header({ children: headerChildren })
+            };
         }
 
-        // 3. Procesar Footer (si viene en el JSON y tiene datos)
         let footers: any = undefined;
         if (dto?.footer && Array.isArray(dto.footer) && dto.footer.length > 0) {
             const footerChildren = await Promise.all(
                 dto.footer.map(async (bloque) => {
-                    // Reutilizamos la lógica de bloques que ya tienes hecha
+                    if (!bloque) return new Paragraph({});
+
+                    // 🔄 REFACTORIZADO: Soporte para tablas con bordes en footer
                     if (bloque.type === 'table' && Array.isArray(bloque.rows)) {
-                        return await this.buildTable(bloque.rows);
+                        return await this.buildTable(bloque.rows, bloque.config);
                     }
                     return this.buildParagraph(bloque.data || [], bloque.config);
                 })
@@ -269,17 +262,25 @@ export class DocumentCompilerService {
             };
         }
 
-        // 4. Retornar la sección completa
         return {
             children: paragraphChildren,
             headers,
             footers,
+            properties: {
+                page: {
+                    margin: {
+                        header: 400,
+                        top: 1550,
+                        bottom: 1440,
+                        footer: 500,
+                        left: 1440,
+                        right: 1440,
+                    },
+                },
+            },
         };
     }
 
-    /**
-     * Carga una imagen física del servidor para incrustarla en el Word
-     */
     private cargarImagenLocal(nombreImagen: string): Buffer | null {
         try {
             const ruta = path.join(process.cwd(), 'assets', nombreImagen);
@@ -300,18 +301,12 @@ export class DocumentCompilerService {
         align?: string,
     ): typeof AlignmentType[keyof typeof AlignmentType] | undefined {
         switch (align) {
-            case 'left':
-                return AlignmentType.LEFT;
-            case 'right':
-                return AlignmentType.RIGHT;
-            case 'center':
-                return AlignmentType.CENTER;
-            case 'justify':
-                return AlignmentType.JUSTIFIED;
-            case 'distribute':
-                return AlignmentType.DISTRIBUTE;
-            default:
-                return undefined;
+            case 'left': return AlignmentType.LEFT;
+            case 'right': return AlignmentType.RIGHT;
+            case 'center': return AlignmentType.CENTER;
+            case 'justify': return AlignmentType.JUSTIFIED;
+            case 'distribute': return AlignmentType.DISTRIBUTE;
+            default: return undefined;
         }
     }
 
@@ -319,43 +314,53 @@ export class DocumentCompilerService {
         heading?: string,
     ): typeof HeadingLevel[keyof typeof HeadingLevel] | undefined {
         switch (heading) {
-            case 'Heading1':
-                return HeadingLevel.HEADING_1;
-            case 'Heading2':
-                return HeadingLevel.HEADING_2;
-            case 'Heading3':
-                return HeadingLevel.HEADING_3;
-            case 'Heading4':
-                return HeadingLevel.HEADING_4;
-            default:
-                return undefined;
+            case 'Heading1': return HeadingLevel.HEADING_1;
+            case 'Heading2': return HeadingLevel.HEADING_2;
+            case 'Heading3': return HeadingLevel.HEADING_3;
+            case 'Heading4': return HeadingLevel.HEADING_4;
+            default: return undefined;
         }
     }
+
     private obtenerTipoImagen(buffer: Buffer): 'png' | 'jpg' | 'gif' | 'bmp' {
-        if (!buffer || buffer.length < 4) return 'png'; // Fallback por defecto
-
-        // PNG: 89 50 4E 47
-        if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
-            return 'png';
-        }
-        // JPG/JPEG: FF D8 FF
-        if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
-            return 'jpg';
-        }
-        // GIF: 47 49 46 (GIF)
-        if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
-            return 'gif';
-        }
-        // BMP: 42 4D (BM)
-        if (buffer[0] === 0x42 && buffer[1] === 0x4d) {
-            return 'bmp';
-        }
-
-        return 'png'; // Si no se reconoce, intentamos incrustarlo como PNG
+        if (!buffer || buffer.length < 4) return 'png';
+        if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return 'png';
+        if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'jpg';
+        if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) return 'gif';
+        if (buffer[0] === 0x42 && buffer[1] === 0x4d) return 'bmp';
+        return 'png';
     }
-    private async buildTable(rowsData: RowConfig[]): Promise<Table> {
+
+    /**
+     * 🛠️ CONSTRUCTOR DE TABLAS DINÁMICAS REFACTORIZADO
+     */
+    private async buildTable(rowsData: RowConfig[], config?: ParagraphConfig): Promise<Table> {
         const tableRows: TableRow[] = [];
         const ANCHO_MAXIMO_DXA = 9026;
+
+        const mapBorder = (border: any) => {
+            if (!border) return undefined;
+            return {
+                style: border.style as any,
+                size: border.size,
+                color: border.color ? border.color.replace('#', '') : undefined,
+                space: border.space,
+            };
+        };
+
+        const tableBorders = config?.borders ? {
+            top: mapBorder(config.borders.top),
+            bottom: mapBorder(config.borders.bottom),
+            left: mapBorder(config.borders.left),
+            right: mapBorder(config.borders.right),
+            insideHorizontal: mapBorder(config.borders.insideHorizontal),
+            insideVertical: mapBorder(config.borders.insideVertical),
+        } : undefined;
+
+        const primeraFila = rowsData[0]?.cells || [];
+        const columnWidths = primeraFila.map(cell =>
+            cell.width ? Math.round((cell.width / 100) * ANCHO_MAXIMO_DXA) : 0
+        );
 
         for (const row of rowsData) {
             const tableCells: TableCell[] = [];
@@ -365,8 +370,6 @@ export class DocumentCompilerService {
                     alignment: cell.alignment,
                 });
 
-                // ✅ SOLUCIÓN: Usamos const y operador ternario. 
-                // TypeScript inferirá automáticamente: { size: number; type: string; } | undefined
                 const widthConfig = cell.width
                     ? {
                         size: Math.round((cell.width / 100) * ANCHO_MAXIMO_DXA),
@@ -378,6 +381,8 @@ export class DocumentCompilerService {
                     new TableCell({
                         children: [cellParagraph],
                         width: widthConfig,
+                        // 🎯 Forzamos el tipo con "as any" para que TypeScript acepte el mapeo limpio
+                        verticalAlign: this.mapVerticalAlign((cell as any).verticalAlign) as any,
                     })
                 );
             }
@@ -387,7 +392,29 @@ export class DocumentCompilerService {
 
         return new Table({
             rows: tableRows,
-            width: { size: ANCHO_MAXIMO_DXA, type: WidthType.DXA },
+            borders: tableBorders as any,
+            width: {
+                size: ANCHO_MAXIMO_DXA,
+                type: WidthType.DXA,
+            },
+            layout: TableLayoutType.FIXED,
+            columnWidths: columnWidths.length > 0 ? columnWidths : undefined,
         });
+    }
+
+    /**
+     * 🗺️ MAPEADOR DE ALINEACIÓN VERTICAL
+     */
+    private mapVerticalAlign(val?: string): typeof VerticalAlign[keyof typeof VerticalAlign] | undefined {
+        switch (val) {
+            case 'center':
+                return VerticalAlign.CENTER;
+            case 'bottom':
+                return VerticalAlign.BOTTOM;
+            case 'top':
+                return VerticalAlign.TOP;
+            default:
+                return undefined; // Deja que Word decida o puedes setear VerticalAlign.CENTER por defecto si lo deseas
+        }
     }
 }

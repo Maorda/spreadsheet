@@ -23,6 +23,10 @@ export class CellConfig {
     @IsOptional()
     @IsString()
     alignment?: 'left' | 'right' | 'center';
+
+    @IsOptional()
+    @IsString()
+    verticalAlign?: 'top' | 'center' | 'bottom';
 }
 
 export class RowConfig {
@@ -139,8 +143,54 @@ export class DataItem {
     @IsBoolean()
     underline?: boolean;
 }
+export class BorderOptionsConfig {
+    @IsOptional()
+    @IsString()
+    style?: string; // 'none', 'single', etc.
 
-// 3. ParagraphConfig con indent y spacing transformados
+    @IsOptional()
+    @IsNumber()
+    size?: number;
+
+    @IsOptional()
+    @IsString()
+    color?: string;
+}
+
+// 2. Nueva clase para agrupar todos los lados del borde de la tabla
+export class BordersConfig {
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => BorderOptionsConfig)
+    top?: BorderOptionsConfig;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => BorderOptionsConfig)
+    bottom?: BorderOptionsConfig;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => BorderOptionsConfig)
+    left?: BorderOptionsConfig;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => BorderOptionsConfig)
+    right?: BorderOptionsConfig;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => BorderOptionsConfig)
+    insideHorizontal?: BorderOptionsConfig;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => BorderOptionsConfig)
+    insideVertical?: BorderOptionsConfig;
+}
+
+// 3. ACTUALIZAR tu ParagraphConfig existente para incluir 'borders'
 export class ParagraphConfig {
     @IsOptional()
     @IsString()
@@ -154,7 +204,6 @@ export class ParagraphConfig {
     @IsString()
     alignment?: 'left' | 'right' | 'center' | 'justify' | 'distribute';
 
-    // 🛡️ Ahora class-validator inspeccionará left, line y after sin borrarlos
     @IsOptional()
     @ValidateNested()
     @Type(() => IndentConfig)
@@ -164,6 +213,12 @@ export class ParagraphConfig {
     @ValidateNested()
     @Type(() => SpacingConfig)
     spacing?: SpacingConfig;
+
+    // 🛡️ Agregamos esto para que class-validator permita y procese los bordes de la tabla
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => BordersConfig)
+    borders?: BordersConfig;
 }
 
 export class PageConfig {
@@ -194,9 +249,10 @@ export class RenderDocumentDto {
     bloques: BloqueContenido[] = []; // 🛡️ Inicializado por defecto
 
     @IsOptional()
-    @ValidateNested()
-    @Type(() => PageConfig)
-    header?: PageConfig;
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => BloqueContenido)
+    header?: BloqueContenido[] = [];
 
     @IsOptional()
     @IsArray()

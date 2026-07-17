@@ -268,9 +268,6 @@ var DocumentCompilerService = class _DocumentCompilerService {
           if (!tipoImagen) {
             this.logger.error(`\u274C [BuildParagraph] No se pudo determinar el tipo de archivo para [${item.img}]. El Hex [${hexHeader}] no coincide con PNG/JPG. Imagen descartada.`);
           } else {
-            if (typeof tipoImagen === "string" && tipoImagen.includes("/")) {
-              this.logger.warn(`\u26A0\uFE0F [BuildParagraph] CUIDADO: obtenerTipoImagen devolvi\xF3 "${tipoImagen}". La librer\xEDa docx y Google Docs suelen exigir la extensi\xF3n simple ('png', 'jpg') sin el prefijo 'image/'.`);
-            }
             try {
               runs.push(new import_docx2.ImageRun({
                 data: bufferImagen,
@@ -299,7 +296,6 @@ var DocumentCompilerService = class _DocumentCompilerService {
             bold: item.style === "strong",
             font: item.font || "Arial",
             size: item.size || 22,
-            // 🛡️ PRO-TIP: Eliminamos el '#' si viene incluido para evitar errores en Word
             color: item.color ? item.color.replace("#", "") : void 0,
             underline: item.underline ? {} : void 0
           }));
@@ -339,28 +335,31 @@ var DocumentCompilerService = class _DocumentCompilerService {
         });
       }
       if (bloque.type === "table" && Array.isArray(bloque.rows)) {
-        return await this.buildTable(bloque.rows);
+        return await this.buildTable(bloque.rows, bloque.config);
       }
       return this.buildParagraph(bloque.data || [], bloque.config);
     }));
     let headers = void 0;
-    if (dto?.header && Array.isArray(dto.header.data)) {
-      const headerParagraph = await this.buildParagraph(dto.header.data, {
-        alignment: dto.header.alignment
-      });
+    if (dto?.header && Array.isArray(dto.header) && dto.header.length > 0) {
+      const headerChildren = await Promise.all(dto.header.map(async (bloque) => {
+        if (!bloque) return new import_docx2.Paragraph({});
+        if (bloque.type === "table" && Array.isArray(bloque.rows)) {
+          return await this.buildTable(bloque.rows, bloque.config);
+        }
+        return this.buildParagraph(bloque.data || [], bloque.config);
+      }));
       headers = {
         default: new import_docx2.Header({
-          children: [
-            headerParagraph
-          ]
+          children: headerChildren
         })
       };
     }
     let footers = void 0;
     if (dto?.footer && Array.isArray(dto.footer) && dto.footer.length > 0) {
       const footerChildren = await Promise.all(dto.footer.map(async (bloque) => {
+        if (!bloque) return new import_docx2.Paragraph({});
         if (bloque.type === "table" && Array.isArray(bloque.rows)) {
-          return await this.buildTable(bloque.rows);
+          return await this.buildTable(bloque.rows, bloque.config);
         }
         return this.buildParagraph(bloque.data || [], bloque.config);
       }));
@@ -373,12 +372,21 @@ var DocumentCompilerService = class _DocumentCompilerService {
     return {
       children: paragraphChildren,
       headers,
-      footers
+      footers,
+      properties: {
+        page: {
+          margin: {
+            header: 400,
+            top: 1550,
+            bottom: 1440,
+            footer: 500,
+            left: 1440,
+            right: 1440
+          }
+        }
+      }
     };
   }
-  /**
-   * Carga una imagen física del servidor para incrustarla en el Word
-   */
   cargarImagenLocal(nombreImagen) {
     try {
       const ruta = path.join(process.cwd(), "assets", nombreImagen);
@@ -424,23 +432,37 @@ var DocumentCompilerService = class _DocumentCompilerService {
   }
   obtenerTipoImagen(buffer) {
     if (!buffer || buffer.length < 4) return "png";
-    if (buffer[0] === 137 && buffer[1] === 80 && buffer[2] === 78 && buffer[3] === 71) {
-      return "png";
-    }
-    if (buffer[0] === 255 && buffer[1] === 216 && buffer[2] === 255) {
-      return "jpg";
-    }
-    if (buffer[0] === 71 && buffer[1] === 73 && buffer[2] === 70) {
-      return "gif";
-    }
-    if (buffer[0] === 66 && buffer[1] === 77) {
-      return "bmp";
-    }
+    if (buffer[0] === 137 && buffer[1] === 80 && buffer[2] === 78 && buffer[3] === 71) return "png";
+    if (buffer[0] === 255 && buffer[1] === 216 && buffer[2] === 255) return "jpg";
+    if (buffer[0] === 71 && buffer[1] === 73 && buffer[2] === 70) return "gif";
+    if (buffer[0] === 66 && buffer[1] === 77) return "bmp";
     return "png";
   }
-  async buildTable(rowsData) {
+  /**
+   * 🛠️ CONSTRUCTOR DE TABLAS DINÁMICAS REFACTORIZADO
+   */
+  async buildTable(rowsData, config) {
     const tableRows = [];
     const ANCHO_MAXIMO_DXA = 9026;
+    const mapBorder = /* @__PURE__ */ __name((border) => {
+      if (!border) return void 0;
+      return {
+        style: border.style,
+        size: border.size,
+        color: border.color ? border.color.replace("#", "") : void 0,
+        space: border.space
+      };
+    }, "mapBorder");
+    const tableBorders = config?.borders ? {
+      top: mapBorder(config.borders.top),
+      bottom: mapBorder(config.borders.bottom),
+      left: mapBorder(config.borders.left),
+      right: mapBorder(config.borders.right),
+      insideHorizontal: mapBorder(config.borders.insideHorizontal),
+      insideVertical: mapBorder(config.borders.insideVertical)
+    } : void 0;
+    const primeraFila = rowsData[0]?.cells || [];
+    const columnWidths = primeraFila.map((cell) => cell.width ? Math.round(cell.width / 100 * ANCHO_MAXIMO_DXA) : 0);
     for (const row of rowsData) {
       const tableCells = [];
       for (const cell of row.cells || []) {
@@ -455,7 +477,9 @@ var DocumentCompilerService = class _DocumentCompilerService {
           children: [
             cellParagraph
           ],
-          width: widthConfig
+          width: widthConfig,
+          // 🎯 Forzamos el tipo con "as any" para que TypeScript acepte el mapeo limpio
+          verticalAlign: this.mapVerticalAlign(cell.verticalAlign)
         }));
       }
       tableRows.push(new import_docx2.TableRow({
@@ -464,11 +488,29 @@ var DocumentCompilerService = class _DocumentCompilerService {
     }
     return new import_docx2.Table({
       rows: tableRows,
+      borders: tableBorders,
       width: {
         size: ANCHO_MAXIMO_DXA,
         type: import_docx2.WidthType.DXA
-      }
+      },
+      layout: import_docx2.TableLayoutType.FIXED,
+      columnWidths: columnWidths.length > 0 ? columnWidths : void 0
     });
+  }
+  /**
+   * 🗺️ MAPEADOR DE ALINEACIÓN VERTICAL
+   */
+  mapVerticalAlign(val) {
+    switch (val) {
+      case "center":
+        return import_docx2.VerticalAlign.CENTER;
+      case "bottom":
+        return import_docx2.VerticalAlign.BOTTOM;
+      case "top":
+        return import_docx2.VerticalAlign.TOP;
+      default:
+        return void 0;
+    }
   }
 };
 DocumentCompilerService = _ts_decorate2([
@@ -500,6 +542,7 @@ var CellConfig = class {
   content = [];
   width;
   alignment;
+  verticalAlign;
 };
 _ts_decorate3([
   (0, import_class_validator.IsArray)(),
@@ -519,6 +562,11 @@ _ts_decorate3([
   (0, import_class_validator.IsString)(),
   _ts_metadata3("design:type", String)
 ], CellConfig.prototype, "alignment", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsString)(),
+  _ts_metadata3("design:type", String)
+], CellConfig.prototype, "verticalAlign", void 0);
 var RowConfig = class {
   static {
     __name(this, "RowConfig");
@@ -701,6 +749,76 @@ _ts_decorate3([
   (0, import_class_validator.IsBoolean)(),
   _ts_metadata3("design:type", Boolean)
 ], DataItem.prototype, "underline", void 0);
+var BorderOptionsConfig = class {
+  static {
+    __name(this, "BorderOptionsConfig");
+  }
+  style;
+  size;
+  color;
+};
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsString)(),
+  _ts_metadata3("design:type", String)
+], BorderOptionsConfig.prototype, "style", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsNumber)(),
+  _ts_metadata3("design:type", Number)
+], BorderOptionsConfig.prototype, "size", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsString)(),
+  _ts_metadata3("design:type", String)
+], BorderOptionsConfig.prototype, "color", void 0);
+var BordersConfig = class {
+  static {
+    __name(this, "BordersConfig");
+  }
+  top;
+  bottom;
+  left;
+  right;
+  insideHorizontal;
+  insideVertical;
+};
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.ValidateNested)(),
+  (0, import_class_transformer.Type)(() => BorderOptionsConfig),
+  _ts_metadata3("design:type", typeof BorderOptionsConfig === "undefined" ? Object : BorderOptionsConfig)
+], BordersConfig.prototype, "top", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.ValidateNested)(),
+  (0, import_class_transformer.Type)(() => BorderOptionsConfig),
+  _ts_metadata3("design:type", typeof BorderOptionsConfig === "undefined" ? Object : BorderOptionsConfig)
+], BordersConfig.prototype, "bottom", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.ValidateNested)(),
+  (0, import_class_transformer.Type)(() => BorderOptionsConfig),
+  _ts_metadata3("design:type", typeof BorderOptionsConfig === "undefined" ? Object : BorderOptionsConfig)
+], BordersConfig.prototype, "left", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.ValidateNested)(),
+  (0, import_class_transformer.Type)(() => BorderOptionsConfig),
+  _ts_metadata3("design:type", typeof BorderOptionsConfig === "undefined" ? Object : BorderOptionsConfig)
+], BordersConfig.prototype, "right", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.ValidateNested)(),
+  (0, import_class_transformer.Type)(() => BorderOptionsConfig),
+  _ts_metadata3("design:type", typeof BorderOptionsConfig === "undefined" ? Object : BorderOptionsConfig)
+], BordersConfig.prototype, "insideHorizontal", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.ValidateNested)(),
+  (0, import_class_transformer.Type)(() => BorderOptionsConfig),
+  _ts_metadata3("design:type", typeof BorderOptionsConfig === "undefined" ? Object : BorderOptionsConfig)
+], BordersConfig.prototype, "insideVertical", void 0);
 var ParagraphConfig = class {
   static {
     __name(this, "ParagraphConfig");
@@ -708,9 +826,10 @@ var ParagraphConfig = class {
   title;
   heading;
   alignment;
-  // 🛡️ Ahora class-validator inspeccionará left, line y after sin borrarlos
   indent;
   spacing;
+  // 🛡️ Agregamos esto para que class-validator permita y procese los bordes de la tabla
+  borders;
 };
 _ts_decorate3([
   (0, import_class_validator.IsOptional)(),
@@ -739,6 +858,12 @@ _ts_decorate3([
   (0, import_class_transformer.Type)(() => SpacingConfig),
   _ts_metadata3("design:type", typeof SpacingConfig === "undefined" ? Object : SpacingConfig)
 ], ParagraphConfig.prototype, "spacing", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.ValidateNested)(),
+  (0, import_class_transformer.Type)(() => BordersConfig),
+  _ts_metadata3("design:type", typeof BordersConfig === "undefined" ? Object : BordersConfig)
+], ParagraphConfig.prototype, "borders", void 0);
 var PageConfig = class {
   static {
     __name(this, "PageConfig");
@@ -766,7 +891,7 @@ var RenderDocumentDto = class {
   carpetaId;
   nombreArchivo;
   bloques = [];
-  header;
+  header = [];
   footer = [];
 };
 _ts_decorate3([
@@ -789,9 +914,12 @@ _ts_decorate3([
 ], RenderDocumentDto.prototype, "bloques", void 0);
 _ts_decorate3([
   (0, import_class_validator.IsOptional)(),
-  (0, import_class_validator.ValidateNested)(),
-  (0, import_class_transformer.Type)(() => PageConfig),
-  _ts_metadata3("design:type", typeof PageConfig === "undefined" ? Object : PageConfig)
+  (0, import_class_validator.IsArray)(),
+  (0, import_class_validator.ValidateNested)({
+    each: true
+  }),
+  (0, import_class_transformer.Type)(() => BloqueContenido),
+  _ts_metadata3("design:type", Array)
 ], RenderDocumentDto.prototype, "header", void 0);
 _ts_decorate3([
   (0, import_class_validator.IsOptional)(),
