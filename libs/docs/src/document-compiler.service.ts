@@ -196,6 +196,7 @@ export class DocumentCompilerService {
     async compilarJSON(dto: RenderDocumentDto): Promise<ISectionOptions> {
         const bloquesSeguros = Array.isArray(dto?.bloques) ? dto.bloques : [];
 
+        // 1. Compilar Bloques Principales
         const paragraphChildren = await Promise.all(
             bloquesSeguros.map(async (bloque) => {
                 if (!bloque) return new Paragraph({});
@@ -209,12 +210,13 @@ export class DocumentCompilerService {
                 }
 
                 if (bloque.type === 'page-break') {
-                    return new Paragraph({
-                        children: [new PageBreak()],
-                    });
+                    return new Paragraph({ children: [new PageBreak()] });
+                }
+                if (bloque.type === 'cover-title') {
+                    // Aquí es donde llamas a tu nuevo método privado
+                    return await this.buildCoverText(bloque.data, bloque.config);
                 }
 
-                // 🔄 REFACTORIZADO: Pasamos el config del bloque para capturar los borders
                 if (bloque.type === 'table' && Array.isArray(bloque.rows)) {
                     return await this.buildTable(bloque.rows, bloque.config);
                 }
@@ -223,43 +225,69 @@ export class DocumentCompilerService {
             }),
         );
 
+        // 2. Preparar el Header (Incluyendo la lógica de Fondo de Página)
         let headers: any = undefined;
+        const headerChildren: any[] = [];
+
+        // --- LÓGICA DE FONDO DE PÁGINA (WATERMARK) ---
+        if (dto.config?.imagenFondoId) {
+            const source = dto.config.imgSource || 'drive';
+            const bufferFondo = await this.obtenerBufferImagen(dto.config.imagenFondoId, source);
+
+            if (bufferFondo) {
+                const tipoImagen = this.obtenerTipoImagen(bufferFondo);
+
+                // Creamos el elemento flotante que actúa como fondo
+                const fondoParagraph = new Paragraph({
+                    children: [
+                        new ImageRun({
+                            data: bufferFondo,
+                            transformation: { width: 827, height: 1169 }, // Ajusta según el tamaño de tu hoja (ej. Carta)
+                            type: tipoImagen as any,
+                            floating: {
+                                horizontalPosition: { offset: 0 },
+                                verticalPosition: { offset: 0 },
+                                behindDocument: true, // ¡Clave para que no tape el texto!
+                            },
+                        }),
+                    ],
+                });
+                headerChildren.push(fondoParagraph);
+            }
+        }
+
+        // Procesar el contenido del header enviado por el DTO
         if (dto?.header && Array.isArray(dto.header) && dto.header.length > 0) {
-            const headerChildren = await Promise.all(
+            const contenidoHeader = await Promise.all(
                 dto.header.map(async (bloque) => {
                     if (!bloque) return new Paragraph({});
-
-                    // 🔄 REFACTORIZADO: Soporte para tablas con bordes en cabecera
                     if (bloque.type === 'table' && Array.isArray(bloque.rows)) {
                         return await this.buildTable(bloque.rows, bloque.config);
                     }
-
                     return this.buildParagraph(bloque.data || [], bloque.config);
                 })
             );
-
-            headers = {
-                default: new Header({ children: headerChildren })
-            };
+            headerChildren.push(...contenidoHeader);
         }
 
+        // Asignar el Header solo si tiene contenido
+        if (headerChildren.length > 0) {
+            headers = { default: new Header({ children: headerChildren }) };
+        }
+
+        // 3. Compilar Footers (se mantiene igual)
         let footers: any = undefined;
         if (dto?.footer && Array.isArray(dto.footer) && dto.footer.length > 0) {
             const footerChildren = await Promise.all(
                 dto.footer.map(async (bloque) => {
                     if (!bloque) return new Paragraph({});
-
-                    // 🔄 REFACTORIZADO: Soporte para tablas con bordes en footer
                     if (bloque.type === 'table' && Array.isArray(bloque.rows)) {
                         return await this.buildTable(bloque.rows, bloque.config);
                     }
                     return this.buildParagraph(bloque.data || [], bloque.config);
                 })
             );
-
-            footers = {
-                default: new Footer({ children: footerChildren })
-            };
+            footers = { default: new Footer({ children: footerChildren }) };
         }
 
         return {
@@ -279,6 +307,58 @@ export class DocumentCompilerService {
                 },
             },
         };
+    }
+
+    private async buildCoverText(data: DataItem[] | undefined, config: ParagraphConfig | undefined): Promise<Table> {
+        const textoFinal = (data && data.length > 0) ? (data[0].text || '') : '';
+
+        // Ahora tomamos los valores de config con valores por defecto inteligentes
+        const marginTop = config?.marginTop || 3500;
+        const marginLeft = config?.marginLeft || 800;
+        const fontSize = config?.fontSize || 40;
+        const color = config?.color || '003366';
+        const fontFamily = config?.fontFamily || 'Amatic SC';
+        const widthPercent = config?.width || 65; // Usamos el width del JSON o 65% por defecto
+
+        return new Table({
+            // La tabla ahora ocupa el ancho que decidimos
+            width: { size: widthPercent, type: WidthType.PERCENTAGE },
+            columnWidths: [7500],
+            borders: {
+                top: { style: 'none', size: 0 },
+                bottom: { style: 'none', size: 0 },
+                left: { style: 'none', size: 0 },
+                right: { style: 'none', size: 0 },
+            },
+            rows: [
+                new TableRow({
+                    children: [
+                        new TableCell({
+                            // Eliminamos el 'shading' rojo, ya no lo necesitamos
+                            width: { size: 100, type: WidthType.PERCENTAGE },
+                            margins: {
+                                top: marginTop,
+                                left: marginLeft,
+                            },
+                            children: [
+                                new Paragraph({
+                                    alignment: AlignmentType.LEFT,
+                                    children: [
+                                        new TextRun({
+                                            text: textoFinal,
+                                            size: fontSize * 2,
+                                            bold: true,
+                                            font: fontFamily,
+                                            color: color
+                                        })
+                                    ]
+                                })
+                            ]
+                        })
+                    ]
+                })
+            ]
+        });
     }
 
     private cargarImagenLocal(nombreImagen: string): Buffer | null {

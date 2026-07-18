@@ -40,7 +40,7 @@ export class RowConfig {
 export class BloqueContenido {
     @IsOptional()
     @IsString()
-    type?: 'text' | 'toc' | 'page-break' | 'table'; // <-- Agregamos page-break y table
+    type?: 'text' | 'toc' | 'page-break' | 'table' | 'cover-title'; // <-- Agregamos page-break y table
 
     @IsOptional()
     @IsArray()
@@ -192,6 +192,27 @@ export class BordersConfig {
 
 // 3. ACTUALIZAR tu ParagraphConfig existente para incluir 'borders'
 export class ParagraphConfig {
+
+    @IsOptional()
+    @IsNumber()
+    marginTop?: number;
+
+    @IsOptional()
+    @IsNumber()
+    marginLeft?: number;
+
+    @IsOptional()
+    @IsNumber()
+    fontSize?: number;
+
+    @IsOptional()
+    @IsString()
+    color?: string;
+
+    @IsOptional()
+    @IsString()
+    fontFamily?: string;
+
     @IsOptional()
     @IsString()
     title?: string;
@@ -219,6 +240,10 @@ export class ParagraphConfig {
     @ValidateNested()
     @Type(() => BordersConfig)
     borders?: BordersConfig;
+
+    @IsOptional()
+    @IsNumber()
+    width?: number;
 }
 
 export class PageConfig {
@@ -232,6 +257,19 @@ export class PageConfig {
     alignment?: 'left' | 'right' | 'center';
 
 
+}
+export class DocumentConfigDto {
+    @IsOptional()
+    @IsString()
+    imagenFondoId?: string; // ID de Google Drive para la marca de agua o fondo
+
+    @IsOptional()
+    @IsString()
+    orientacion?: 'portrait' | 'landscape';
+
+    @IsOptional()
+    @IsString()
+    imgSource?: 'web' | 'drive' | 'local';
 }
 
 export class RenderDocumentDto {
@@ -259,4 +297,9 @@ export class RenderDocumentDto {
     @ValidateNested({ each: true })
     @Type(() => BloqueContenido)
     footer?: BloqueContenido[] = [];
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => DocumentConfigDto)
+    config?: DocumentConfigDto;
 }

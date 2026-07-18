@@ -334,20 +334,56 @@ var DocumentCompilerService = class _DocumentCompilerService {
           ]
         });
       }
+      if (bloque.type === "cover-title") {
+        return await this.buildCoverText(bloque.data, bloque.config);
+      }
       if (bloque.type === "table" && Array.isArray(bloque.rows)) {
         return await this.buildTable(bloque.rows, bloque.config);
       }
       return this.buildParagraph(bloque.data || [], bloque.config);
     }));
     let headers = void 0;
+    const headerChildren = [];
+    if (dto.config?.imagenFondoId) {
+      const source = dto.config.imgSource || "drive";
+      const bufferFondo = await this.obtenerBufferImagen(dto.config.imagenFondoId, source);
+      if (bufferFondo) {
+        const tipoImagen = this.obtenerTipoImagen(bufferFondo);
+        const fondoParagraph = new import_docx2.Paragraph({
+          children: [
+            new import_docx2.ImageRun({
+              data: bufferFondo,
+              transformation: {
+                width: 827,
+                height: 1169
+              },
+              type: tipoImagen,
+              floating: {
+                horizontalPosition: {
+                  offset: 0
+                },
+                verticalPosition: {
+                  offset: 0
+                },
+                behindDocument: true
+              }
+            })
+          ]
+        });
+        headerChildren.push(fondoParagraph);
+      }
+    }
     if (dto?.header && Array.isArray(dto.header) && dto.header.length > 0) {
-      const headerChildren = await Promise.all(dto.header.map(async (bloque) => {
+      const contenidoHeader = await Promise.all(dto.header.map(async (bloque) => {
         if (!bloque) return new import_docx2.Paragraph({});
         if (bloque.type === "table" && Array.isArray(bloque.rows)) {
           return await this.buildTable(bloque.rows, bloque.config);
         }
         return this.buildParagraph(bloque.data || [], bloque.config);
       }));
+      headerChildren.push(...contenidoHeader);
+    }
+    if (headerChildren.length > 0) {
       headers = {
         default: new import_docx2.Header({
           children: headerChildren
@@ -386,6 +422,74 @@ var DocumentCompilerService = class _DocumentCompilerService {
         }
       }
     };
+  }
+  async buildCoverText(data, config) {
+    const textoFinal = data && data.length > 0 ? data[0].text || "" : "";
+    const marginTop = config?.marginTop || 3500;
+    const marginLeft = config?.marginLeft || 800;
+    const fontSize = config?.fontSize || 40;
+    const color = config?.color || "003366";
+    const fontFamily = config?.fontFamily || "Amatic SC";
+    const widthPercent = config?.width || 65;
+    return new import_docx2.Table({
+      // La tabla ahora ocupa el ancho que decidimos
+      width: {
+        size: widthPercent,
+        type: import_docx2.WidthType.PERCENTAGE
+      },
+      columnWidths: [
+        7500
+      ],
+      borders: {
+        top: {
+          style: "none",
+          size: 0
+        },
+        bottom: {
+          style: "none",
+          size: 0
+        },
+        left: {
+          style: "none",
+          size: 0
+        },
+        right: {
+          style: "none",
+          size: 0
+        }
+      },
+      rows: [
+        new import_docx2.TableRow({
+          children: [
+            new import_docx2.TableCell({
+              // Eliminamos el 'shading' rojo, ya no lo necesitamos
+              width: {
+                size: 100,
+                type: import_docx2.WidthType.PERCENTAGE
+              },
+              margins: {
+                top: marginTop,
+                left: marginLeft
+              },
+              children: [
+                new import_docx2.Paragraph({
+                  alignment: import_docx2.AlignmentType.LEFT,
+                  children: [
+                    new import_docx2.TextRun({
+                      text: textoFinal,
+                      size: fontSize * 2,
+                      bold: true,
+                      font: fontFamily,
+                      color
+                    })
+                  ]
+                })
+              ]
+            })
+          ]
+        })
+      ]
+    });
   }
   cargarImagenLocal(nombreImagen) {
     try {
@@ -823,6 +927,11 @@ var ParagraphConfig = class {
   static {
     __name(this, "ParagraphConfig");
   }
+  marginTop;
+  marginLeft;
+  fontSize;
+  color;
+  fontFamily;
   title;
   heading;
   alignment;
@@ -830,7 +939,33 @@ var ParagraphConfig = class {
   spacing;
   // 🛡️ Agregamos esto para que class-validator permita y procese los bordes de la tabla
   borders;
+  width;
 };
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsNumber)(),
+  _ts_metadata3("design:type", Number)
+], ParagraphConfig.prototype, "marginTop", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsNumber)(),
+  _ts_metadata3("design:type", Number)
+], ParagraphConfig.prototype, "marginLeft", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsNumber)(),
+  _ts_metadata3("design:type", Number)
+], ParagraphConfig.prototype, "fontSize", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsString)(),
+  _ts_metadata3("design:type", String)
+], ParagraphConfig.prototype, "color", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsString)(),
+  _ts_metadata3("design:type", String)
+], ParagraphConfig.prototype, "fontFamily", void 0);
 _ts_decorate3([
   (0, import_class_validator.IsOptional)(),
   (0, import_class_validator.IsString)(),
@@ -864,6 +999,11 @@ _ts_decorate3([
   (0, import_class_transformer.Type)(() => BordersConfig),
   _ts_metadata3("design:type", typeof BordersConfig === "undefined" ? Object : BordersConfig)
 ], ParagraphConfig.prototype, "borders", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsNumber)(),
+  _ts_metadata3("design:type", Number)
+], ParagraphConfig.prototype, "width", void 0);
 var PageConfig = class {
   static {
     __name(this, "PageConfig");
@@ -884,6 +1024,29 @@ _ts_decorate3([
   (0, import_class_validator.IsString)(),
   _ts_metadata3("design:type", String)
 ], PageConfig.prototype, "alignment", void 0);
+var DocumentConfigDto = class {
+  static {
+    __name(this, "DocumentConfigDto");
+  }
+  imagenFondoId;
+  orientacion;
+  imgSource;
+};
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsString)(),
+  _ts_metadata3("design:type", String)
+], DocumentConfigDto.prototype, "imagenFondoId", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsString)(),
+  _ts_metadata3("design:type", String)
+], DocumentConfigDto.prototype, "orientacion", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.IsString)(),
+  _ts_metadata3("design:type", String)
+], DocumentConfigDto.prototype, "imgSource", void 0);
 var RenderDocumentDto = class {
   static {
     __name(this, "RenderDocumentDto");
@@ -893,6 +1056,7 @@ var RenderDocumentDto = class {
   bloques = [];
   header = [];
   footer = [];
+  config;
 };
 _ts_decorate3([
   (0, import_class_validator.IsString)(),
@@ -930,6 +1094,12 @@ _ts_decorate3([
   (0, import_class_transformer.Type)(() => BloqueContenido),
   _ts_metadata3("design:type", Array)
 ], RenderDocumentDto.prototype, "footer", void 0);
+_ts_decorate3([
+  (0, import_class_validator.IsOptional)(),
+  (0, import_class_validator.ValidateNested)(),
+  (0, import_class_transformer.Type)(() => DocumentConfigDto),
+  _ts_metadata3("design:type", typeof DocumentConfigDto === "undefined" ? Object : DocumentConfigDto)
+], RenderDocumentDto.prototype, "config", void 0);
 
 // src/compilador.controller.ts
 function _ts_decorate4(decorators, target, key, desc) {
